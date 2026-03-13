@@ -35,11 +35,17 @@ function App() {
   const API_BASE =
     import.meta?.env?.VITE_API_BASE_URL || '/api';
 
-  const handleScan = async () => {
+  const cleanSequence = (raw) => {
+    // 去除所有空白字符（空格、换行、制表符、全角空格等）
+    return raw.replace(/[\s\u3000]/g, '').toUpperCase();
+  };
+
+  const handleScan = async (e) => {
+    if (e) e.preventDefault();
     setError('');
     setResult(null);
 
-    const seq = sequence.trim();
+    const seq = cleanSequence(sequence);
     if (!seq) {
       setError('请输入抗体氨基酸序列。');
       return;
@@ -54,13 +60,23 @@ function App() {
       });
 
       if (!resp.ok) {
-        throw new Error(`后端返回错误状态码：${resp.status}`);
+        let detail = '';
+        try {
+          const body = await resp.text();
+          detail = body ? `\n响应内容：${body.slice(0, 200)}` : '';
+        } catch (_) { /* ignore */ }
+        throw new Error(`请求失败 [HTTP ${resp.status} ${resp.statusText}]${detail}`);
       }
 
       const data = await resp.json();
       setResult(data);
     } catch (e) {
-      setError(e.message || '调用后端接口失败，请检查服务是否已启动。');
+      if (e.name === 'TypeError') {
+        // fetch 本身抛出的网络错误（如 DNS 失败、CORS、断网等）
+        setError(`网络错误：无法连接到服务器 (${e.message})。\n请检查网络连接或稍后重试。`);
+      } else {
+        setError(e.message || '未知错误，请稍后重试。');
+      }
     } finally {
       setLoading(false);
     }
@@ -74,7 +90,7 @@ function App() {
         </h1>
 
         {/* 输入区域 */}
-        <div className="space-y-4 rounded-2xl bg-[#292929] px-5 py-5">
+        <form onSubmit={handleScan} className="space-y-4 rounded-2xl bg-[#292929] px-5 py-5">
           <div className="flex items-center justify-between gap-4">
             <label className="block text-sm font-medium text-slate-300 mb-1">
               抗体氨基酸序列
@@ -94,9 +110,9 @@ function App() {
             />
             <div className="flex items-center gap-3">
               <button
-                onClick={handleScan}
+                type="submit"
                 disabled={loading}
-                className="inline-flex items-center justify-center rounded-lg bg-[#5D56C1] hover:bg-[#6d66d4] disabled:opacity-60 disabled:cursor-not-allowed px-4 py-2 text-sm font-medium text-slate-50 transition-colors"
+                className="inline-flex items-center justify-center rounded-lg bg-[#5D56C1] hover:bg-[#6d66d4] active:bg-[#4a44a8] disabled:opacity-60 disabled:cursor-not-allowed px-4 py-2 text-sm font-medium text-slate-50 transition-colors"
               >
                 {loading ? '扫描中…' : '开始扫描'}
               </button>
@@ -114,7 +130,7 @@ function App() {
                 {error}
               </p>
             )}
-          </div>
+          </form>
 
         {/* 结果区域 */}
         <div className="space-y-3 rounded-2xl bg-[#292929] px-5 py-5">
