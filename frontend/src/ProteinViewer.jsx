@@ -162,10 +162,25 @@ function ProteinViewer({ pdbUrl, pdbFormat = 'pdb', pdbText, selectedResidue }) 
     if (!viewerRef.current || !pdbUrl) { destroyPlugin(); return; }
     if (currentUrl.current === pdbUrl) return;
 
-    const PDBeMolstarPlugin = window.PDBeMolstarPlugin;
-    if (!PDBeMolstarPlugin) return;
+    // 等待 Mol* 脚本异步加载完成（最长等 30 秒）
+    let cancelled = false;
+    function init() {
+      if (cancelled) return;
+      const PDBeMolstarPlugin = window.PDBeMolstarPlugin;
+      if (!PDBeMolstarPlugin) {
+        setTimeout(init, 500);
+        return;
+      }
+      doInit(PDBeMolstarPlugin);
+    }
+    const waitTimeout = setTimeout(() => { cancelled = true; }, 30000);
+    init();
+    return () => { cancelled = true; clearTimeout(waitTimeout); destroyPlugin(); };
+  }, [pdbUrl, pdbFormat, destroyPlugin, addSurfaceLayer, applyCdrColoring]);
 
+  const doInit = useCallback((PDBeMolstarPlugin) => {
     destroyPlugin();
+    if (!viewerRef.current) return;
     viewerRef.current.innerHTML = '';
 
     const plugin = new PDBeMolstarPlugin();
@@ -199,8 +214,6 @@ function ProteinViewer({ pdbUrl, pdbFormat = 'pdb', pdbText, selectedResidue }) 
     }, 400);
     const to = setTimeout(() => { clearInterval(iv); loadTimer.current = null; }, 15000);
     loadTimer.current = { iv, to };
-
-    return () => destroyPlugin();
   }, [pdbUrl, pdbFormat, destroyPlugin, addSurfaceLayer, applyCdrColoring]);
 
   /* ── 残基选中：Ball & Stick (黄色) + 5Å 环境 + Focus + 闪烁 ── */
