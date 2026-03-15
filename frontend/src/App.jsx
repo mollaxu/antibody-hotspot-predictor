@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import ProteinViewer from './ProteinViewer.jsx';
 
 /* ── 三字母 → 单字母映射 ── */
@@ -75,7 +75,7 @@ function extractSequenceFromPdb(text) {
 }
 
 /* ── 序列可视化组件 ── */
-function SequenceStrip({ sequence, hotspots, selectedResidue }) {
+function SequenceStrip({ sequence, hotspots, selectedResidue, onSelectResidue }) {
   if (!sequence) {
     return (
       <div className="text-[11px] text-slate-500">
@@ -128,17 +128,30 @@ function SequenceStrip({ sequence, hotspots, selectedResidue }) {
     }
   };
 
-  const lineLength = 50;
+  // 自适应：根据容器宽度动态计算每行残基数
+  const containerRef = useRef(null);
+  const [lineLength, setLineLength] = useState(50);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const MIN_CELL = 10; // 每个残基最小宽度 (px)
+    const PAD = 16;      // 容器左右 px-2 = 8*2
+    const calc = () => {
+      const w = el.clientWidth - PAD;
+      const count = Math.max(10, Math.floor(w / MIN_CELL));
+      setLineLength(count);
+    };
+    calc();
+    const ro = new ResizeObserver(calc);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
   const lines = [];
   for (let i = 0; i < seq.length; i += lineLength) {
     lines.push({ start: i, end: Math.min(i + lineLength, seq.length) });
   }
-
-  const shortenRule = (rule) => {
-    if (!rule) return '';
-    if (rule.length <= 8) return rule;
-    return `${rule.slice(0, 7)}…`;
-  };
 
   return (
     <div className="w-full text-[11px] font-mono text-slate-300">
@@ -150,50 +163,60 @@ function SequenceStrip({ sequence, hotspots, selectedResidue }) {
           <span className="text-emerald-300">● 低风险</span>
         </div>
       </div>
-      <div className="overflow-x-auto border border-slate-700/60 rounded-lg px-2 py-2 bg-[#181818] space-y-1.5">
-        {lines.map(({ start, end }) => (
-          <div key={start} className="space-y-0.5">
-            {/* index row */}
-            <div className="flex gap-[2px] whitespace-nowrap text-[9px] text-slate-500">
-              {Array.from({ length: end - start }).map((_, i) => {
-                const pos = start + i;
-                const label = (pos + 1) % 10 === 0 ? pos + 1 : '·';
-                return (
-                  <span
-                    key={pos}
-                    className="w-[8px] flex-none text-center"
-                  >
-                    {label}
-                  </span>
-                );
-              })}
+      <div ref={containerRef} className="border border-slate-700/60 rounded-lg px-2 py-2 bg-[#181818] space-y-1.5">
+        {lines.map(({ start, end }) => {
+          const count = end - start;
+          const isFull = count === lineLength;
+          const cellCls = isFull ? 'flex-1 min-w-0' : 'w-0 flex-none';
+          // 不满行时用与满行相同的单元格宽度，通过 CSS calc 得出
+          const cellStyle = isFull ? undefined : { width: `calc(100% / ${lineLength})` };
+          return (
+            <div key={start} className="space-y-0.5">
+              {/* index row */}
+              <div className="flex whitespace-nowrap text-[9px] text-slate-500">
+                {Array.from({ length: count }).map((_, i) => {
+                  const pos = start + i;
+                  const label = (pos + 1) % 10 === 0 ? pos + 1 : '·';
+                  return (
+                    <span
+                      key={pos}
+                      className={`${cellCls} text-center`}
+                      style={cellStyle}
+                    >
+                      {label}
+                    </span>
+                  );
+                })}
+              </div>
+              {/* sequence row */}
+              <div className="flex whitespace-nowrap">
+                {Array.from(seq.slice(start, end)).map((aa, offset) => {
+                  const idx = start + offset;
+                  const info = perResidue[idx];
+                  const isSelected = selectedResidue && selectedResidue - 1 === idx;
+                  const baseCls = info ? riskToClass(info.risk) : 'text-slate-400';
+                  const cls = isSelected
+                    ? `${baseCls} bg-yellow-500/30 rounded-sm`
+                    : baseCls;
+                  const title = info
+                    ? `${aa}${idx + 1} · ${info.rule || ''} · ${info.risk}`
+                    : `${aa}${idx + 1}`;
+                  return (
+                    <span
+                      key={idx}
+                      className={`${cls} select-none ${cellCls} text-center cursor-pointer`}
+                      style={cellStyle}
+                      title={title}
+                      onClick={() => onSelectResidue && onSelectResidue(idx + 1)}
+                    >
+                      {aa}
+                    </span>
+                  );
+                })}
+              </div>
             </div>
-            {/* sequence row */}
-            <div className="flex gap-[2px] whitespace-nowrap">
-              {Array.from(seq.slice(start, end)).map((aa, offset) => {
-                const idx = start + offset;
-                const info = perResidue[idx];
-                const isSelected = selectedResidue && selectedResidue - 1 === idx;
-                const baseCls = info ? riskToClass(info.risk) : 'text-slate-400';
-                const cls = isSelected
-                  ? `${baseCls} bg-yellow-500/30 rounded-sm`
-                  : baseCls;
-                const title = info
-                  ? `${aa}${idx + 1} · ${info.rule || ''} · ${info.risk}`
-                  : `${aa}${idx + 1}`;
-                return (
-                  <span
-                    key={idx}
-                    className={`${cls} select-none w-[8px] flex-none text-center`}
-                    title={title}
-                  >
-                    {aa}
-                  </span>
-                );
-              })}
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
@@ -406,6 +429,32 @@ function App() {
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
+  const scrollToResidueInList = (residueNumber) => {
+    if (!result || !result.hotspots || !Number.isInteger(residueNumber)) return;
+    const zeroBased = residueNumber - 1;
+    let targetId = null;
+
+    result.hotspots.forEach((h, globalIdx) => {
+      const start = h.start ?? 0;
+      const end = h.end ?? start + 1;
+      if (zeroBased >= start && zeroBased < end && targetId === null) {
+        targetId = `hotspot-${start}-${end}-${globalIdx}`;
+      }
+    });
+
+    if (targetId) {
+      const el = document.getElementById(targetId);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }
+  };
+
+  const handleResidueSelectFromSequence = (residueNumber) => {
+    setSelectedResidue(residueNumber);
+    scrollToResidueInList(residueNumber);
+  };
+
   const handleExport = () => {
     if (!result || !result.hotspots || result.hotspots.length === 0) {
       setError('当前没有可导出的扫描结果，请先完成一次扫描。');
@@ -537,6 +586,7 @@ function App() {
               sequence={sequence}
               hotspots={result?.hotspots}
               selectedResidue={selectedResidue}
+              onSelectResidue={handleResidueSelectFromSequence}
             />
             <div className="flex-1 rounded-xl overflow-hidden">
               <ProteinViewer
@@ -564,6 +614,7 @@ function App() {
                     sequence={sequence}
                     hotspots={result?.hotspots}
                     selectedResidue={selectedResidue}
+                    onSelectResidue={handleResidueSelectFromSequence}
                   />
                   <div className="h-[640px] rounded-2xl overflow-hidden">
                     <ProteinViewer
@@ -633,12 +684,27 @@ function App() {
                               </span>
                             </div>
                             <ul className="space-y-2">
-                              {groupItems.map((h, idx) => (
-                                <li
-                                  key={`${groupLabel}-${idx}-${h.start}-${h.end}`}
-                                  className="rounded-lg bg-[#292929] px-3 py-2.5 cursor-pointer hover:bg-[#333333]"
-                                  onClick={() => setSelectedResidue(h.start + 1)}
-                                >
+                              {groupItems.map((h, idx) => {
+                        const isSelected =
+                          selectedResidue != null &&
+                          selectedResidue - 1 >= (h.start ?? 0) &&
+                          selectedResidue - 1 < (h.end ?? (h.start ?? 0) + 1);
+
+                        // 使用全局索引来构造 id，方便 scrollToResidueInList 精确滚动
+                        const globalIdx = result.hotspots.indexOf(h);
+                        const itemId = `hotspot-${h.start ?? 0}-${h.end ?? 0}-${globalIdx}`;
+
+                                return (
+                                  <li
+                            key={`${groupLabel}-${idx}-${h.start}-${h.end}`}
+                            id={itemId}
+                                    className={`rounded-lg px-3 py-2.5 cursor-pointer transition-colors ${
+                                      isSelected
+                                        ? 'bg-[#3b3b3b] ring-1 ring-[#5D56C1]'
+                                        : 'bg-[#292929] hover:bg-[#333333]'
+                                    }`}
+                                    onClick={() => setSelectedResidue(h.start + 1)}
+                                  >
                                   <div className="flex items-center justify-between gap-2">
                                     <div className="font-semibold text-slate-50 text-xs">
                                       基序：{h.motif}
@@ -657,7 +723,7 @@ function App() {
                                   </div>
                                   <div className="mt-1 text-[11px] text-slate-400 space-x-2">
                                     <span className="font-semibold text-slate-100">
-                                      位点区间：{h.start} - {h.end}
+                                      位点区间：{h.end - h.start === 1 ? h.start + 1 : `${h.start + 1} - ${h.end}`}
                                     </span>
                                     <span
                                       className={
@@ -674,7 +740,7 @@ function App() {
                                     分类：{h.category}，正则：{h.regex}
                                   </div>
                                 </li>
-                              ))}
+                              );})}
                             </ul>
                           </div>
                         );
