@@ -317,6 +317,8 @@ function App() {
   const [pdbFormat, setPdbFormat] = useState('pdb');
   const [selectedResidue, setSelectedResidue] = useState(null);
   const [show3DMobile, setShow3DMobile] = useState(false);
+  const [foldingStatus, setFoldingStatus] = useState(''); // '' | 'loading' | 'done' | 'error'
+  const [foldingError, setFoldingError] = useState('');
   const fileInputRef = useRef(null);
 
   const groupOrder = [
@@ -375,9 +377,54 @@ function App() {
     }
   };
 
+  /* ── ESMFold 结构预测 ── */
+  const predictStructure = async (rawSeq) => {
+    const seq = cleanSequence(rawSeq || '');
+    if (!seq) return;
+    if (seq.length > 400) {
+      setFoldingError('序列超过 400 残基，ESMFold 暂不支持，请上传 PDB 文件。');
+      setFoldingStatus('error');
+      return;
+    }
+
+    setFoldingStatus('loading');
+    setFoldingError('');
+    try {
+      const resp = await fetch('https://api.esmatlas.com/foldSequence/v1/pdb/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain' },
+        body: seq,
+      });
+      if (!resp.ok) {
+        throw new Error(`ESMFold 返回错误 [HTTP ${resp.status}]`);
+      }
+      const pdbContent = await resp.text();
+      if (!pdbContent || !pdbContent.includes('ATOM')) {
+        throw new Error('ESMFold 返回的结构数据无效');
+      }
+      // 释放旧的 blob URL
+      if (pdbUrl) URL.revokeObjectURL(pdbUrl);
+      const blob = new Blob([pdbContent], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      setPdbText(pdbContent);
+      setPdbFileName('predicted.pdb');
+      setPdbFormat('pdb');
+      setPdbUrl(url);
+      setFoldingStatus('done');
+    } catch (e) {
+      setFoldingError(e.message || 'ESMFold 预测失败，请稍后重试。');
+      setFoldingStatus('error');
+    }
+  };
+
   const handleScan = async (e) => {
     if (e) e.preventDefault();
-    await runScan(sequence);
+    // 同时触发 hotspot 扫描和结构预测（如果没有已上传的 PDB）
+    const scanPromise = runScan(sequence);
+    if (!pdbUrl) {
+      predictStructure(sequence);
+    }
+    await scanPromise;
   };
 
   /* ── PDB 上传 ── */
@@ -426,6 +473,8 @@ function App() {
     setPdbFormat('pdb');
     setSelectedResidue(null);
     setShow3DMobile(false);
+    setFoldingStatus('');
+    setFoldingError('');
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
@@ -588,7 +637,21 @@ function App() {
               selectedResidue={selectedResidue}
               onSelectResidue={handleResidueSelectFromSequence}
             />
-            <div className="flex-1 rounded-xl overflow-hidden">
+            <div className="flex-1 rounded-xl overflow-hidden relative">
+              {foldingStatus === 'loading' && (
+                <div className="absolute inset-0 z-10 flex items-center justify-center bg-[#181818]/90 rounded-xl">
+                  <div className="text-center space-y-3">
+                    <div className="inline-block w-8 h-8 border-2 border-slate-500 border-t-cyan-400 rounded-full animate-spin" />
+                    <p className="text-sm text-slate-300">结构预测中…预计需要 10-30 秒</p>
+                    <p className="text-[11px] text-slate-500">由 ESMFold 提供预测服务</p>
+                  </div>
+                </div>
+              )}
+              {foldingStatus === 'error' && !pdbUrl && (
+                <div className="absolute inset-0 z-10 flex items-center justify-center bg-[#181818]/90 rounded-xl">
+                  <p className="text-sm text-red-400 px-4 text-center">{foldingError}</p>
+                </div>
+              )}
               <ProteinViewer
                 pdbUrl={pdbUrl}
                 pdbFormat={pdbFormat}
