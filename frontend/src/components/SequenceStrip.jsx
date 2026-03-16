@@ -3,7 +3,7 @@ import { useState, useRef, useEffect } from 'react';
 export default function SequenceStrip({ sequence, hotspots, selectedResidue, onSelectResidue, chainInfo = [] }) {
   if (!sequence) {
     return (
-      <div className="text-xs text-slate-500">
+      <div className="text-xs text-neutral-500">
         上传 PDB 或输入序列后，这里将以颜色标记潜在 Hotspot 残基。
       </div>
     );
@@ -117,7 +117,7 @@ export default function SequenceStrip({ sequence, hotspots, selectedResidue, onS
         <div className="flex items-center gap-2">
           <span className="text-base font-bold text-slate-200">序列视图</span>
           {chainInfo.length > 0 && (
-            <span className="text-xs text-slate-500">
+            <span className="text-xs text-neutral-500">
               {chainInfo.map((c) => (
                 <span key={c.id} className={`${chainColorMap[c.id]} mr-1.5`}>Chain {c.id}</span>
               ))}
@@ -130,7 +130,7 @@ export default function SequenceStrip({ sequence, hotspots, selectedResidue, onS
           <span className="text-yellow-300">● 低风险</span>
         </div>
       </div>
-      <div ref={containerRef} className="border border-slate-700/60 rounded-lg px-2 py-2 bg-[#181818] space-y-1.5 max-h-[190px] overflow-y-auto">
+      <div ref={containerRef} className="rounded-lg px-2 py-2 bg-[#181818] space-y-1.5 max-h-[190px] overflow-y-auto">
         {lines.map(({ start, end }) => {
           const count = end - start;
           const isFull = count === lineLength;
@@ -157,7 +157,7 @@ export default function SequenceStrip({ sequence, hotspots, selectedResidue, onS
                   })}
                 </div>
               )}
-              <div className="flex whitespace-nowrap text-[9px] text-slate-500">
+              <div className="flex whitespace-nowrap text-[9px] text-neutral-500">
                 {Array.from({ length: count }).map((_, i) => {
                   const pos = start + i;
                   const label = (pos + 1) % 10 === 0 ? pos + 1 : '·';
@@ -178,7 +178,7 @@ export default function SequenceStrip({ sequence, hotspots, selectedResidue, onS
                   const title = info
                     ? `${chainLabel}${aa}${idx + 1} · ${info.rule || ''} · ${info.risk}`
                     : `${chainLabel}${aa}${idx + 1}`;
-                  const borderCls = boundarySet.has(offset) && offset > 0 ? 'border-l border-slate-500' : '';
+                  const borderCls = '';
                   return (
                     <span
                       key={idx}

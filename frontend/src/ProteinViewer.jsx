@@ -263,7 +263,7 @@ function ProteinViewer({ pdbUrl, pdbFormat = 'pdb', pdbText, selectedResidue, pr
         style={{ display: pdbUrl ? 'block' : 'none' }}
       />
       {!pdbUrl && (
-        <div className="absolute inset-0 flex items-center justify-center text-sm text-slate-500">
+        <div className="absolute inset-0 flex items-center justify-center text-sm text-neutral-500">
           上传 PDB 文件后，这里将展示 3D 结构
         </div>
       )}

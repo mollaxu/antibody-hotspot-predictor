@@ -74,7 +74,7 @@ export default function InputPage() {
             <label className="text-base font-bold text-slate-300">氨基酸序列</label>
           </div>
           <textarea
-            className="w-full h-36 rounded-xl bg-[#1F1F1F] border border-slate-700 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 resize-none font-mono"
+            className="w-full h-36 rounded-xl bg-[#1F1F1F] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#5D56C1] resize-none font-mono"
             placeholder="请输入序列，或上传蛋白文件自动提取"
             value={sequence}
             onChange={(e) => setSequence(e.target.value)}
@@ -104,7 +104,7 @@ export default function InputPage() {
             <label className="flex items-center justify-between cursor-pointer">
               <div>
                 <p className="text-sm text-slate-200">结构预测</p>
-                <p className="text-xs text-slate-500 mt-0.5">使用 ESMFold 自动预测 3D 结构（序列 ≤ 400 残基）</p>
+                <p className="text-xs text-neutral-500 mt-0.5">使用 ESMFold 自动预测 3D 结构（序列 ≤ 400 残基）</p>
               </div>
               <div
                 className={`relative w-10 h-5 rounded-full transition-colors ${enablePrediction ? 'bg-[#5D56C1]' : 'bg-slate-600'}`}
@@ -128,7 +128,7 @@ export default function InputPage() {
               type="button"
               onClick={handleClear}
               disabled={loading}
-              className="inline-flex items-center justify-center rounded-lg border border-slate-600 px-4 py-2.5 text-sm font-medium text-slate-200 hover:bg-slate-800/80 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+              className="inline-flex items-center justify-center rounded-lg bg-[#363636] px-4 py-2.5 text-sm font-medium text-slate-200 hover:bg-[#404040] disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
             >
               清空
             </button>

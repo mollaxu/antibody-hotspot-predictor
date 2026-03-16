@@ -27,7 +27,7 @@ export default function ResultsPage() {
   if (!result) return <Navigate to="/" replace />;
 
   return (
-    <div className="flex-1 overflow-y-auto p-4 space-y-4">
+    <div className="flex-1 p-4 space-y-2 overflow-hidden flex flex-col">
       {/* 返回按钮 */}
       <button
         type="button"
@@ -41,10 +41,10 @@ export default function ResultsPage() {
       </button>
 
       {/* ── 下方：左 序列+3D · 右 结果 ── */}
-      <div className="flex flex-col md:flex-row gap-4 min-h-[calc(100vh-180px)]">
+      <div className="flex flex-col md:flex-row gap-4 flex-1 min-h-0">
 
         {/* 左侧：序列视图 + 3D 结构 */}
-        <div className="hidden md:flex md:w-[55%] md:min-h-[960px] rounded-2xl bg-[#292929] px-4 py-4 flex-col gap-3">
+        <div className="hidden md:flex md:w-[55%] rounded-2xl bg-[#292929] px-4 py-4 flex-col gap-3 overflow-hidden">
           <SequenceStrip
             sequence={sequence}
             hotspots={result?.hotspots}
@@ -58,7 +58,7 @@ export default function ResultsPage() {
                 <div className="text-center space-y-3">
                   <div className="inline-block w-8 h-8 border-2 border-slate-500 border-t-cyan-400 rounded-full animate-spin" />
                   <p className="text-sm text-slate-300">结构预测中…预计需要 10-30 秒</p>
-                  <p className="text-xs text-slate-500">由 ESMFold 提供预测服务</p>
+                  <p className="text-xs text-neutral-500">由 ESMFold 提供预测服务</p>
                 </div>
               </div>
             )}
@@ -69,7 +69,7 @@ export default function ResultsPage() {
             )}
             {foldingStatus === 'done' && foldingError && (
               <div className="absolute top-2 left-2 right-2 z-10">
-                <p className="text-xs text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-1.5">
+                <p className="text-xs text-amber-300 bg-amber-500/10 rounded-lg px-3 py-1.5">
                   ⚠ {foldingError}
                 </p>
               </div>
@@ -118,7 +118,7 @@ export default function ResultsPage() {
         )}
 
         {/* 右侧：扫描结果 */}
-        <div className="flex-1 flex flex-col rounded-2xl bg-[#292929] px-5 py-5 md:min-h-[960px] md:max-h-[960px]">
+        <div className="flex-1 flex flex-col rounded-2xl bg-[#292929] px-5 py-5 overflow-hidden">
           <div className="shrink-0 flex items-center justify-between gap-3 pb-3">
             <h2 className="text-base font-bold text-slate-100">扫描结果</h2>
             {result?.hotspots?.length > 0 && (
@@ -152,10 +152,10 @@ export default function ResultsPage() {
                 {filterOpen && (
                   <>
                     <div className="fixed inset-0 z-40" onClick={() => setFilterOpen(false)} />
-                    <div className="absolute right-0 top-full mt-2 z-50 w-72 rounded-xl bg-[#1F1F1F] border border-slate-700 p-4 space-y-3 shadow-xl shadow-black/40">
+                    <div className="absolute right-0 top-full mt-2 z-50 w-72 rounded-xl bg-[#1F1F1F] p-4 space-y-3 shadow-xl shadow-black/40">
                       {isAntibody && (
                         <div className="flex items-center gap-2">
-                          <span className="text-xs text-slate-500 w-14 shrink-0">区域</span>
+                          <span className="text-xs text-neutral-500 w-14 shrink-0">区域</span>
                           <div className="flex items-center rounded-lg bg-[#292929] p-0.5 text-xs">
                             {['all', 'cdr'].map((v) => (
                               <button
@@ -175,7 +175,7 @@ export default function ResultsPage() {
 
                       {chainInfo.length > 0 && (
                         <div className="flex gap-2">
-                          <span className="text-xs text-slate-500 w-14 shrink-0 pt-0.5">链</span>
+                          <span className="text-xs text-neutral-500 w-14 shrink-0 pt-0.5">链</span>
                           <div className="flex flex-col gap-1.5 text-xs">
                             {chainInfo.map((c) => {
                               const checked = filterChains.length === 0 || filterChains.includes(c.id);
@@ -206,11 +206,11 @@ export default function ResultsPage() {
                       )}
 
                       <div className="flex items-center gap-2">
-                        <span className="text-xs text-slate-500 w-14 shrink-0">类别</span>
+                        <span className="text-xs text-neutral-500 w-14 shrink-0">类别</span>
                         <select
                           value={filterGroup}
                           onChange={(e) => setFilterGroup(e.target.value)}
-                          className="flex-1 rounded-lg bg-[#292929] border border-slate-700 px-2 py-1 text-xs text-slate-300 focus:outline-none focus:ring-1 focus:ring-[#5D56C1]"
+                          className="flex-1 rounded-lg bg-[#292929] px-2 py-1 text-xs text-slate-300 focus:outline-none focus:ring-1 focus:ring-[#5D56C1]"
                         >
                           <option value="all">全部类别</option>
                           {groupOrder.map((g) => (
@@ -220,7 +220,7 @@ export default function ResultsPage() {
                       </div>
 
                       <div className="flex items-center gap-2">
-                        <span className="text-xs text-slate-500 w-14 shrink-0">风险</span>
+                        <span className="text-xs text-neutral-500 w-14 shrink-0">风险</span>
                         <div className="flex items-center rounded-lg bg-[#292929] p-0.5 text-xs">
                           {[
                             { value: 'all', label: '全部' },
@@ -242,7 +242,7 @@ export default function ResultsPage() {
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-2 pt-1 border-t border-slate-700/60">
+                      <div className="flex items-center gap-2 pt-2">
                         <button
                           type="button"
                           onClick={() => setFilterOpen(false)}
@@ -253,7 +253,7 @@ export default function ResultsPage() {
                         <button
                           type="button"
                           onClick={() => { setFilterRegion('all'); setFilterGroup('all'); setFilterRisk('all'); setFilterChains([]); }}
-                          className="flex-1 px-3 py-1.5 rounded-md text-xs text-slate-400 hover:text-slate-200 border border-slate-700 transition-colors"
+                          className="flex-1 px-3 py-1.5 rounded-md text-xs text-slate-400 hover:text-slate-200 bg-[#292929] transition-colors"
                         >
                           清空筛选
                         </button>
@@ -302,7 +302,7 @@ export default function ResultsPage() {
                             <h3 className="text-base font-bold tracking-wide text-slate-300 uppercase">
                               {displayLabel}
                             </h3>
-                            <span className="text-xs text-slate-500">
+                            <span className="text-xs text-neutral-500">
                               共 {groupItems.length} 个风险位点
                             </span>
                           </div>
@@ -379,7 +379,7 @@ export default function ResultsPage() {
               </div>
 
               {result.buried_filtered && result.buried_filtered.length > 0 && (
-                <p className="text-xs text-slate-500">
+                <p className="text-xs text-neutral-500">
                   另有 {result.buried_filtered.length} 个命中位点因 RSA &lt; 5% 被归入"结构屏蔽清单"。
                 </p>
               )}

@@ -251,8 +251,8 @@ function App() {
     <div className="h-screen bg-[#1F1F1F] text-slate-50 flex flex-col overflow-hidden">
       {/* ── 顶栏（仅输入页显示） ── */}
       {!isResultsPage && (
-        <header className="shrink-0 px-6 py-4 flex items-center justify-center">
-          <h1 className="text-2xl font-semibold tracking-tight">
+        <header className="shrink-0 px-6 pt-16 pb-4 flex items-center justify-center">
+          <h1 className="text-[40px] font-semibold tracking-tight">
             可开发性风险点预测平台
           </h1>
         </header>
