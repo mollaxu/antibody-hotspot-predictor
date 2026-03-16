@@ -120,7 +120,18 @@ export default function ResultsPage() {
         {/* 右侧：扫描结果 */}
         <div className="flex-1 flex flex-col rounded-2xl bg-[#292929] px-5 py-5 overflow-hidden">
           <div className="shrink-0 flex items-center justify-between gap-3 pb-3">
-            <h2 className="text-base font-bold text-slate-100">扫描结果</h2>
+            <div className="flex items-center gap-2">
+              <h2 className="text-base font-bold text-slate-100">扫描结果</h2>
+              {proteinType && (
+                <span className={`text-xs px-2 py-0.5 rounded-full ${
+                  isAntibody ? 'bg-blue-500/20 text-blue-300'
+                  : proteinType === 'Peptide' ? 'bg-purple-500/20 text-purple-300'
+                  : 'bg-emerald-500/20 text-emerald-300'
+                }`}>
+                  {proteinType}
+                </span>
+              )}
+            </div>
             {result?.hotspots?.length > 0 && (
               <div className="flex items-center gap-2 relative">
                 {/* 筛选按钮 */}
@@ -277,7 +288,7 @@ export default function ResultsPage() {
             <div className="space-y-4">
               <div className="rounded-xl bg-[#1F1F1F]">
                 {result.hotspots && result.hotspots.length > 0 ? (
-                  <div className="divide-y divide-slate-800 text-sm">
+                  <div className="text-sm">
                     {groupOrder
                       .filter((g) => filterGroup === 'all' || g === filterGroup)
                       .map((groupLabel) => {
