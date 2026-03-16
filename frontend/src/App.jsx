@@ -69,7 +69,7 @@ function App() {
       const resp = await fetch(`${API_BASE}/scan`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sequence: seq })
+        body: JSON.stringify({ sequence: seq, pdb_text: pdbText || null })
       });
 
       if (!resp.ok) {
@@ -92,6 +92,20 @@ function App() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const rescanWithPdb = async (seq, pdbContent) => {
+    try {
+      const resp = await fetch(`${API_BASE}/scan`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sequence: seq, pdb_text: pdbContent })
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        setResult(data);
+      }
+    } catch (_) { /* 静默失败，保留之前的结果 */ }
   };
 
   const predictStructure = async (rawSeq) => {
@@ -137,6 +151,8 @@ function App() {
       setPdbFormat('pdb');
       setPdbUrl(url);
       setFoldingStatus('done');
+      // 结构就绪后用真实 RSA 重新扫描
+      rescanWithPdb(seq, pdbContent);
     } catch (e) {
       setFoldingError(e.message || 'ESMFold 预测失败，请稍后重试。');
       setFoldingStatus('error');

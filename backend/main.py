@@ -9,8 +9,11 @@ from services.scanner import scan_sequence
 ESMFOLD_URL = "https://api.esmatlas.com/foldSequence/v1/pdb/"
 
 
+from typing import Optional
+
 class ScanRequest(BaseModel):
   sequence: str
+  pdb_text: Optional[str] = None
 
 
 class FoldRequest(BaseModel):
@@ -30,7 +33,7 @@ app.add_middleware(
 
 @app.post("/scan")
 def scan(req: ScanRequest):
-  result = scan_sequence(req.sequence)
+  result = scan_sequence(req.sequence, pdb_text=req.pdb_text)
   return result
 
 

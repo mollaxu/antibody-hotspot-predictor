@@ -279,7 +279,6 @@ export default function ResultsPage() {
           {result && (
             <p className="shrink-0 text-xs text-slate-400 pb-2">
               序列长度：{result.sequence_length}，命中位点：{result.hotspots?.length || 0} 个
-              （已按 RSA Mock=0.5 通过业务规则过滤）
             </p>
           )}
 
@@ -372,7 +371,7 @@ export default function ResultsPage() {
                                         区域：{h.region}
                                       </span>
                                     )}
-                                    <span>{h.region && h.region !== 'N/A' ? '| ' : ''}RSA：{(h.rsa * 100).toFixed(1)}%</span>
+                                    <span>{h.region && h.region !== 'N/A' ? '| ' : ''}RSA：{h.rsa >= 0 ? `${(h.rsa * 100).toFixed(1)}%` : 'N/A'}</span>
                                   </div>
                                 </li>
                               );

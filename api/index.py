@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
 
+from typing import Optional
 from backend.services.scanner import scan_sequence
 
 ESMFOLD_URL = "https://api.esmatlas.com/foldSequence/v1/pdb/"
@@ -17,6 +18,7 @@ ESMFOLD_URL = "https://api.esmatlas.com/foldSequence/v1/pdb/"
 
 class ScanRequest(BaseModel):
     sequence: str
+    pdb_text: Optional[str] = None
 
 
 class FoldRequest(BaseModel):
@@ -36,7 +38,7 @@ app.add_middleware(
 
 @app.post("/api/scan")
 def scan(req: ScanRequest):
-    result = scan_sequence(req.sequence)
+    result = scan_sequence(req.sequence, pdb_text=req.pdb_text)
     return result
 
 
