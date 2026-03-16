@@ -1,7 +1,9 @@
 import re
 
+# ═══════════════════════════════════════════════════════════════
 # PTM Hotspot 扫描规则库（基于 PRD 附录规则表）
 # group 字段需与前端 groupOrder 完全一致
+# ═══════════════════════════════════════════════════════════════
 HOTSPOT_RULES = [
     # 1. 脱酰胺
     {"group": "1. 脱酰胺", "rule_name": "脱酰胺-NG",      "motif": "NG",      "regex": "NG",      "pattern": r"NG",      "risk": "High",   "category": "化学稳定性"},
@@ -35,23 +37,62 @@ HOTSPOT_RULES = [
 # RSA 尚未接入 FreeSASA，使用 mock 值
 MOCK_RSA = 0.5
 
-# Kabat 近似区域划分（0-based 位置范围，适用于典型抗体可变区 ~110-120 残基）
-# 超出可变区范围的视为 Fc 区
+
+# ═══════════════════════════════════════════════════════════════
+# 蛋白类型识别
+# ═══════════════════════════════════════════════════════════════
+
+# 抗体可变区特征正则：
+#   C...W...C 框架保守半胱氨酸-色氨酸-半胱氨酸骨架 (FR1-CDR1-FR2 区间)
+_AB_FRAMEWORK_RE = re.compile(r"C.{8,40}W.{20,60}C")
+#   重链 J 区标志 WGXG / FGXG（FR4 区特征）
+_AB_JH_RE = re.compile(r"[WF]G.G")
+
+
+def identify_protein_type(sequence: str) -> str:
+    """根据序列特征判断蛋白类型。
+
+    Returns:
+        "Antibody"        – 识别到抗体可变区框架特征
+        "Peptide"         – 长度 < 50 的短肽
+        "General Protein" – 其他蛋白 / 酶
+    """
+    if len(sequence) < 50:
+        return "Peptide"
+
+    # 同时满足框架骨架和 J 区标志 → 高置信度抗体
+    has_framework = bool(_AB_FRAMEWORK_RE.search(sequence))
+    has_j_motif = bool(_AB_JH_RE.search(sequence))
+
+    if has_framework and has_j_motif:
+        return "Antibody"
+
+    # 仅框架骨架命中（可能是单域抗体 / VHH）也视为抗体
+    if has_framework:
+        return "Antibody"
+
+    return "General Protein"
+
+
+# ═══════════════════════════════════════════════════════════════
+# 抗体 IMGT 近似区域划分（0-based）
+# ═══════════════════════════════════════════════════════════════
+
 REGION_MAP_HEAVY = [
-    (0,   25,  "FR-H1"),
-    (25,  35,  "CDR-H1"),
-    (35,  49,  "FR-H2"),
-    (49,  65,  "CDR-H2"),
-    (65,  94,  "FR-H3"),
-    (94,  102, "CDR-H3"),
-    (102, 120, "FR-H4"),
+    (0,   25,  "FR1"),
+    (25,  35,  "CDR1"),
+    (35,  49,  "FR2"),
+    (49,  65,  "CDR2"),
+    (65,  94,  "FR3"),
+    (94,  102, "CDR3"),
+    (102, 120, "FR4"),
 ]
 
 VARIABLE_REGION_END = 120
 
 
-def _assign_region(pos: int, seq_len: int) -> str:
-    """根据 Kabat 近似位置为残基分配区域标签。"""
+def _assign_region_antibody(pos: int, seq_len: int) -> str:
+    """抗体序列：根据 Kabat 近似位置分配 CDR / FR / Fc 区域。"""
     if pos >= VARIABLE_REGION_END:
         return "Fc"
     for start, end, label in REGION_MAP_HEAVY:
@@ -60,28 +101,44 @@ def _assign_region(pos: int, seq_len: int) -> str:
     return "FR"
 
 
+# ═══════════════════════════════════════════════════════════════
+# 主扫描函数
+# ═══════════════════════════════════════════════════════════════
+
 def scan_sequence(sequence: str) -> dict:
-    """扫描抗体序列，返回所有命中的 PTM hotspot 位点。"""
+    """扫描序列，返回所有命中的 PTM hotspot 位点。"""
     sequence = sequence.strip().upper()
     seq_len = len(sequence)
-    hotspots = []
 
+    # 1. 识别蛋白类型
+    protein_type = identify_protein_type(sequence)
+    is_antibody = protein_type == "Antibody"
+
+    # 2. 扫描 hotspot
+    hotspots = []
     for rule in HOTSPOT_RULES:
         for match in re.finditer(rule["pattern"], sequence):
             base_risk = rule["risk"]
-            region = _assign_region(match.start(), seq_len)
-            # PRD 规则：CDR 区且 RSA > 20% 时提升为 Critical
+
+            # 区域分配：仅抗体执行 CDR/FR 划分
+            if is_antibody:
+                region = _assign_region_antibody(match.start(), seq_len)
+            else:
+                region = "N/A"
+
+            # CDR 风险提升：仅抗体且位于 CDR 区
             final_risk = base_risk
-            if region.startswith("CDR") and MOCK_RSA > 0.20:
+            if is_antibody and region.startswith("CDR") and MOCK_RSA > 0.20:
                 if base_risk in ("High", "Medium"):
                     final_risk = "Critical"
+
             hotspots.append({
                 "group":      rule["group"],
                 "rule_name":  rule["rule_name"],
                 "motif":      match.group(),
                 "regex":      rule["regex"],
-                "start":      match.start(),           # 0-based
-                "end":        match.end(),              # 0-based exclusive
+                "start":      match.start(),
+                "end":        match.end(),
                 "region":     region,
                 "base_risk":  base_risk,
                 "final_risk": final_risk,
@@ -89,11 +146,10 @@ def scan_sequence(sequence: str) -> dict:
                 "category":   rule["category"],
             })
 
-    # 按位置排序，高风险优先
+    # 3. 排序 & 去重
     risk_order = {"Critical": 0, "High": 1, "Medium": 2, "Low": 3}
     hotspots.sort(key=lambda h: (h["start"], risk_order.get(h["base_risk"], 9)))
 
-    # 去重：同一位置同一 group 只保留最高风险
     seen = set()
     unique = []
     for h in hotspots:
@@ -103,7 +159,8 @@ def scan_sequence(sequence: str) -> dict:
             unique.append(h)
 
     return {
-        "sequence_length": len(sequence),
+        "protein_type":    protein_type,
+        "sequence_length": seq_len,
         "hotspots":        unique,
         "buried_filtered": [],
     }

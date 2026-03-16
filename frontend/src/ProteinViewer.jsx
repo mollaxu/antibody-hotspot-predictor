@@ -2,14 +2,9 @@ import { useEffect, useRef, useCallback, useMemo } from 'react';
 
 /* ── Kabat 近似 CDR 区间（1-based 残基编号） ── */
 const CDR_REGIONS = [
-  // 重链
-  { name: 'CDR-H1', start: 31, end: 35,  color: { r: 230, g: 50,  b: 50  } },
-  { name: 'CDR-H2', start: 50, end: 65,  color: { r: 50,  g: 190, b: 50  } },
-  { name: 'CDR-H3', start: 95, end: 102, color: { r: 60,  g: 100, b: 240 } },
-  // 轻链（浅色系）
-  { name: 'CDR-L1', start: 24, end: 34,  color: { r: 255, g: 150, b: 150 } },
-  { name: 'CDR-L2', start: 50, end: 56,  color: { r: 150, g: 230, b: 150 } },
-  { name: 'CDR-L3', start: 89, end: 97,  color: { r: 150, g: 150, b: 255 } },
+  { name: 'CDR1', start: 26, end: 35,  color: { r: 230, g: 50,  b: 50  } },
+  { name: 'CDR2', start: 50, end: 65,  color: { r: 50,  g: 190, b: 50  } },
+  { name: 'CDR3', start: 95, end: 102, color: { r: 60,  g: 100, b: 240 } },
 ];
 
 // 构建 CDR 残基编号集合（用于快速判断）
@@ -87,12 +82,12 @@ function findResiduesWithin(caAtoms, targetResNum, radius) {
 
 /* ══════════════════════════════════════════════ */
 
-function ProteinViewer({ pdbUrl, pdbFormat = 'pdb', pdbText, selectedResidue }) {
+function ProteinViewer({ pdbUrl, pdbFormat = 'pdb', pdbText, selectedResidue, proteinType }) {
+  const isAntibody = proteinType === 'Antibody';
   const viewerRef   = useRef(null);
   const pluginRef   = useRef(null);
   const currentUrl  = useRef(null);
   const loadTimer   = useRef(null);
-  const blinkTimer  = useRef(null);
 
   const caAtoms = useMemo(() => {
     if (!pdbText) return [];
@@ -101,7 +96,6 @@ function ProteinViewer({ pdbUrl, pdbFormat = 'pdb', pdbText, selectedResidue }) 
 
   /* ── 销毁 ── */
   const destroyPlugin = useCallback(() => {
-    if (blinkTimer.current)  { clearInterval(blinkTimer.current); blinkTimer.current = null; }
     if (loadTimer.current)   { clearInterval(loadTimer.current.iv); clearTimeout(loadTimer.current.to); loadTimer.current = null; }
     if (pluginRef.current)   { try { pluginRef.current.clear(); } catch {} pluginRef.current = null; }
     currentUrl.current = null;
@@ -216,15 +210,13 @@ function ProteinViewer({ pdbUrl, pdbFormat = 'pdb', pdbText, selectedResidue }) 
     loadTimer.current = { iv, to };
   }, [pdbUrl, pdbFormat, destroyPlugin, addSurfaceLayer, applyCdrColoring]);
 
-  /* ── 残基选中：Ball & Stick (黄色) + 5Å 环境 + Focus + 闪烁 ── */
+  /* ── 残基选中：Ball & Stick (黄色) + 5Å 环境 + Focus ── */
   useEffect(() => {
     if (!pluginRef.current || !selectedResidue || !pdbUrl) return;
 
-    // 清除上一次闪烁
-    if (blinkTimer.current) { clearInterval(blinkTimer.current); blinkTimer.current = null; }
-
     try {
       pluginRef.current.visual.clearSelection();
+      pluginRef.current.visual.clearHighlight();
 
       // 5Å 邻居
       const nearby = findResiduesWithin(caAtoms, selectedResidue, 5.0);
@@ -251,24 +243,10 @@ function ProteinViewer({ pdbUrl, pdbFormat = 'pdb', pdbText, selectedResidue }) 
         data: [{ residue_number: selectedResidue }],
       });
 
-      // 闪烁高亮 3 秒（交替 highlight / clearHighlight）
-      let on = true;
-      blinkTimer.current = setInterval(() => {
-        try {
-          if (on) {
-            pluginRef.current.visual.highlight({
-              data: [{ residue_number: selectedResidue }],
-            });
-          } else {
-            pluginRef.current.visual.clearHighlight();
-          }
-          on = !on;
-        } catch {}
-      }, 350);
-      setTimeout(() => {
-        if (blinkTimer.current) { clearInterval(blinkTimer.current); blinkTimer.current = null; }
-        try { pluginRef.current.visual.clearHighlight(); } catch {}
-      }, 3000);
+      // 高亮选中残基
+      pluginRef.current.visual.highlight({
+        data: [{ residue_number: selectedResidue }],
+      });
 
       // 补回 CDR 着色
       setTimeout(applyCdrColoring, 300);
@@ -289,14 +267,12 @@ function ProteinViewer({ pdbUrl, pdbFormat = 'pdb', pdbText, selectedResidue }) 
           上传 PDB 文件后，这里将展示 3D 结构
         </div>
       )}
-      {pdbUrl && (
+      {pdbUrl && isAntibody && (
         <div className="absolute bottom-2 left-2 flex flex-wrap gap-x-2 gap-y-1 text-[10px] pointer-events-none">
-          <span className="px-1.5 py-0.5 rounded" style={{ backgroundColor: 'rgba(230,50,50,0.25)', color: '#e63232' }}>H1</span>
-          <span className="px-1.5 py-0.5 rounded" style={{ backgroundColor: 'rgba(50,190,50,0.25)', color: '#32be32' }}>H2</span>
-          <span className="px-1.5 py-0.5 rounded" style={{ backgroundColor: 'rgba(60,100,240,0.25)', color: '#3c64f0' }}>H3</span>
-          <span className="px-1.5 py-0.5 rounded" style={{ backgroundColor: 'rgba(255,150,150,0.2)', color: '#ff9696' }}>L1</span>
-          <span className="px-1.5 py-0.5 rounded" style={{ backgroundColor: 'rgba(150,230,150,0.2)', color: '#96e696' }}>L2</span>
-          <span className="px-1.5 py-0.5 rounded" style={{ backgroundColor: 'rgba(150,150,255,0.2)', color: '#9696ff' }}>L3</span>
+          <span className="px-1.5 py-0.5 rounded" style={{ backgroundColor: 'rgba(230,50,50,0.25)', color: '#e63232' }}>CDR1</span>
+          <span className="px-1.5 py-0.5 rounded" style={{ backgroundColor: 'rgba(50,190,50,0.25)', color: '#32be32' }}>CDR2</span>
+          <span className="px-1.5 py-0.5 rounded" style={{ backgroundColor: 'rgba(60,100,240,0.25)', color: '#3c64f0' }}>CDR3</span>
+          <span className="px-1.5 py-0.5 rounded" style={{ backgroundColor: 'rgba(200,200,200,0.15)', color: '#c8c8c8' }}>FR</span>
         </div>
       )}
     </div>
