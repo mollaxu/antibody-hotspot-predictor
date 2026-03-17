@@ -18,6 +18,7 @@ export default function ResultsPage() {
     filterGroup, setFilterGroup,
     filterRisk, setFilterRisk,
     filterChains, setFilterChains,
+    filterRsaMin, setFilterRsaMin, filterRsaMax, setFilterRsaMax,
     handleExport, handleResidueSelectFromSequence,
   } = ctx;
 
@@ -32,7 +33,7 @@ export default function ResultsPage() {
       <button
         type="button"
         onClick={() => navigate('/')}
-        className="inline-flex items-center gap-1 text-sm text-slate-400 hover:text-slate-200 transition-colors"
+        className="inline-flex items-center gap-1 text-sm text-slate-400 hover:text-slate-200 transition-colors self-start"
       >
         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
@@ -163,20 +164,16 @@ export default function ResultsPage() {
                 {filterOpen && (
                   <>
                     <div className="fixed inset-0 z-40" onClick={() => setFilterOpen(false)} />
-                    <div className="absolute right-0 top-full mt-2 z-50 w-72 rounded-xl bg-[#1F1F1F] p-4 space-y-3 shadow-xl shadow-black/40">
+                    <div className="absolute right-0 top-full mt-2 z-50 w-96 rounded-xl bg-[#1F1F1F] p-5 space-y-5 shadow-xl shadow-black/40 max-h-[80vh] overflow-y-auto">
+
+                      {/* 区域 */}
                       {isAntibody && (
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs text-neutral-500 w-14 shrink-0">区域</span>
+                        <div className="space-y-2">
+                          <span className="text-xs font-medium text-neutral-400">区域</span>
                           <div className="flex items-center rounded-lg bg-[#292929] p-0.5 text-xs">
                             {['all', 'cdr'].map((v) => (
-                              <button
-                                key={v}
-                                type="button"
-                                onClick={() => setFilterRegion(v)}
-                                className={`px-3 py-1 rounded-md transition-colors ${
-                                  filterRegion === v ? 'bg-[#5D56C1] text-slate-50' : 'text-slate-400 hover:text-slate-200'
-                                }`}
-                              >
+                              <button key={v} type="button" onClick={() => setFilterRegion(v)}
+                                className={`px-3 py-1.5 rounded-md transition-colors ${filterRegion === v ? 'bg-[#5D56C1] text-slate-50' : 'text-slate-400 hover:text-slate-200'}`}>
                                 {v === 'all' ? '全部' : 'CDR'}
                               </button>
                             ))}
@@ -184,17 +181,16 @@ export default function ResultsPage() {
                         </div>
                       )}
 
+                      {/* 链 */}
                       {chainInfo.length > 0 && (
-                        <div className="flex gap-2">
-                          <span className="text-xs text-neutral-500 w-14 shrink-0 pt-0.5">链</span>
-                          <div className="flex flex-col gap-1.5 text-xs">
+                        <div className="space-y-2">
+                          <span className="text-xs font-medium text-neutral-400">链</span>
+                          <div className="flex flex-wrap gap-2 text-xs">
                             {chainInfo.map((c) => {
                               const checked = filterChains.length === 0 || filterChains.includes(c.id);
                               return (
-                                <label key={c.id} className="flex items-center gap-2 cursor-pointer text-slate-300 hover:text-slate-100">
-                                  <input
-                                    type="checkbox"
-                                    checked={checked}
+                                <label key={c.id} className="flex items-center gap-1.5 cursor-pointer text-slate-300 hover:text-slate-100">
+                                  <input type="checkbox" checked={checked}
                                     onChange={() => {
                                       if (filterChains.length === 0) {
                                         setFilterChains(chainInfo.filter(ch => ch.id !== c.id).map(ch => ch.id));
@@ -206,8 +202,7 @@ export default function ResultsPage() {
                                         setFilterChains(next.length === chainInfo.length ? [] : next);
                                       }
                                     }}
-                                    className="w-3.5 h-3.5 rounded accent-[#5D56C1]"
-                                  />
+                                    className="w-3.5 h-3.5 rounded accent-[#5D56C1]" />
                                   Chain {c.id}
                                 </label>
                               );
@@ -216,55 +211,95 @@ export default function ResultsPage() {
                         </div>
                       )}
 
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs text-neutral-500 w-14 shrink-0">类别</span>
-                        <select
-                          value={filterGroup}
-                          onChange={(e) => setFilterGroup(e.target.value)}
-                          className="flex-1 rounded-lg bg-[#292929] px-2 py-1 text-xs text-slate-300 focus:outline-none focus:ring-1 focus:ring-[#5D56C1]"
-                        >
-                          <option value="all">全部类别</option>
-                          {groupOrder.map((g) => (
-                            <option key={g} value={g}>{g.replace(/^\d+\.\s*/, '')}</option>
-                          ))}
-                        </select>
+                      {/* 类别（多选） */}
+                      <div className="space-y-2">
+                        <span className="text-xs font-medium text-neutral-400">类别 {filterGroup.length > 0 && <span className="text-[#8b85e0]">({filterGroup.length})</span>}</span>
+                        <div className="flex flex-wrap gap-1.5">
+                          {[...groupOrder, ...(result?.hotspots || []).map(h => h.group).filter(g => !groupOrder.includes(g)).filter((g, i, a) => a.indexOf(g) === i)].map((g) => {
+                            const active = filterGroup.includes(g);
+                            return (
+                              <button key={g} type="button"
+                                onClick={() => setFilterGroup(prev => active ? prev.filter(x => x !== g) : [...prev, g])}
+                                className={`px-2 py-1 rounded-md text-xs transition-colors ${active ? 'bg-[#5D56C1] text-slate-50' : 'bg-[#292929] text-slate-400 hover:text-slate-200'}`}>
+                                {g}
+                              </button>
+                            );
+                          })}
+                        </div>
                       </div>
 
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs text-neutral-500 w-14 shrink-0">风险</span>
-                        <div className="flex items-center rounded-lg bg-[#292929] p-0.5 text-xs">
+                      {/* 风险（多选） */}
+                      <div className="space-y-2">
+                        <span className="text-xs font-medium text-neutral-400">风险等级 {filterRisk.length > 0 && <span className="text-[#8b85e0]">({filterRisk.length})</span>}</span>
+                        <div className="flex gap-1.5">
                           {[
-                            { value: 'all', label: '全部' },
-                            { value: 'High', label: '高' },
-                            { value: 'Medium', label: '中' },
-                            { value: 'Low', label: '低' },
-                          ].map(({ value, label }) => (
-                            <button
-                              key={value}
-                              type="button"
-                              onClick={() => setFilterRisk(value)}
-                              className={`px-3 py-1 rounded-md transition-colors ${
-                                filterRisk === value ? 'bg-[#5D56C1] text-slate-50' : 'text-slate-400 hover:text-slate-200'
-                              }`}
-                            >
-                              {label}
+                            { value: 'Critical', label: 'Critical', color: 'bg-red-500/20 text-red-500 border-red-500/30' },
+                            { value: 'High', label: 'High', color: 'bg-red-500/20 text-red-400 border-red-500/30' },
+                            { value: 'Medium', label: 'Medium', color: 'bg-orange-500/20 text-orange-400 border-orange-500/30' },
+                            { value: 'Low', label: 'Low', color: 'bg-yellow-500/20 text-yellow-300 border-yellow-500/30' },
+                          ].map(({ value, label, color }) => {
+                            const active = filterRisk.includes(value);
+                            return (
+                              <button key={value} type="button"
+                                onClick={() => setFilterRisk(prev => active ? prev.filter(x => x !== value) : [...prev, value])}
+                                className={`px-2.5 py-1 rounded-md text-xs border transition-colors ${active ? 'bg-[#5D56C1] text-slate-50 border-[#5D56C1]' : `${color} border`}`}>
+                                {label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* RSA 滑块 */}
+                      <div className="space-y-2.5">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-medium text-neutral-400">RSA</span>
+                          <span className="text-xs text-slate-300 font-mono">{filterRsaMin}% – {filterRsaMax}%</span>
+                        </div>
+                        <div className="relative h-7">
+                          <div className="absolute top-2 left-0 right-0 h-2 rounded-full bg-[#292929] overflow-hidden">
+                            <div className="absolute h-full bg-red-500/60" style={{ left: '0%', width: '5%' }} />
+                            <div className="absolute h-full bg-orange-500/50" style={{ left: '5%', width: '15%' }} />
+                            <div className="absolute h-full bg-emerald-500/50" style={{ left: '20%', width: '80%' }} />
+                          </div>
+                          <div className="absolute top-2 h-2 rounded-full bg-[#5D56C1]/60"
+                            style={{ left: `${filterRsaMin}%`, width: `${filterRsaMax - filterRsaMin}%` }} />
+                          <input type="range" min={0} max={100} step={1} value={filterRsaMin}
+                            onChange={e => { const v = Number(e.target.value); if (v <= filterRsaMax) setFilterRsaMin(v); }}
+                            className="absolute top-0 left-0 w-full h-7 appearance-none bg-transparent pointer-events-none [&::-webkit-slider-thumb]:pointer-events-auto [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3.5 [&::-webkit-slider-thumb]:h-3.5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-[#5D56C1] [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-[#1F1F1F] [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:relative [&::-webkit-slider-thumb]:z-20" />
+                          <input type="range" min={0} max={100} step={1} value={filterRsaMax}
+                            onChange={e => { const v = Number(e.target.value); if (v >= filterRsaMin) setFilterRsaMax(v); }}
+                            className="absolute top-0 left-0 w-full h-7 appearance-none bg-transparent pointer-events-none [&::-webkit-slider-thumb]:pointer-events-auto [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3.5 [&::-webkit-slider-thumb]:h-3.5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-[#5D56C1] [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-[#1F1F1F] [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:relative [&::-webkit-slider-thumb]:z-20" />
+                        </div>
+                        <div className="flex gap-1.5">
+                          {[
+                            { label: '深埋 <5%', min: 0, max: 5 },
+                            { label: '部分 5-20%', min: 5, max: 20 },
+                            { label: '暴露 >20%', min: 20, max: 100 },
+                            { label: '全部', min: 0, max: 100 },
+                          ].map(p => (
+                            <button key={p.label} type="button"
+                              onClick={() => { setFilterRsaMin(p.min); setFilterRsaMax(p.max); }}
+                              className={`flex-1 px-1 py-1 rounded-md text-[11px] transition-colors ${
+                                filterRsaMin === p.min && filterRsaMax === p.max
+                                  ? 'bg-[#5D56C1] text-slate-50'
+                                  : 'bg-[#292929] text-slate-400 hover:text-slate-200'
+                              }`}>
+                              {p.label}
                             </button>
                           ))}
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-2 pt-2">
-                        <button
-                          type="button"
-                          onClick={() => setFilterOpen(false)}
-                          className="flex-1 px-3 py-1.5 rounded-md bg-[#5D56C1] text-xs text-slate-50 hover:bg-[#6d66d4] transition-colors"
-                        >
+                      {/* 操作按钮 */}
+                      <div className="flex items-center gap-2 pt-1">
+                        <button type="button" onClick={() => setFilterOpen(false)}
+                          className="flex-1 px-3 py-2 rounded-lg bg-[#5D56C1] text-xs text-slate-50 hover:bg-[#6d66d4] transition-colors">
                           确定
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => { setFilterRegion('all'); setFilterGroup('all'); setFilterRisk('all'); setFilterChains([]); }}
-                          className="flex-1 px-3 py-1.5 rounded-md text-xs text-slate-400 hover:text-slate-200 bg-[#292929] transition-colors"
+                        <button type="button"
+                          onClick={() => { setFilterRegion('all'); setFilterGroup([]); setFilterRisk([]); setFilterChains([]); setFilterRsaMin(0); setFilterRsaMax(100); }}
+                          className="flex-1 px-3 py-2 rounded-lg text-xs text-slate-400 hover:text-slate-200 bg-[#292929] transition-colors"
                         >
                           清空筛选
                         </button>
@@ -288,14 +323,21 @@ export default function ResultsPage() {
               <div className="rounded-xl bg-[#1F1F1F]">
                 {result.hotspots && result.hotspots.length > 0 ? (
                   <div className="text-sm">
-                    {groupOrder
-                      .filter((g) => filterGroup === 'all' || g === filterGroup)
+                    {[...groupOrder, ...(result.hotspots || []).map(h => h.group).filter(g => !groupOrder.includes(g)).filter((g, i, a) => a.indexOf(g) === i)]
+                      .filter((g) => filterGroup.length === 0 || filterGroup.includes(g))
                       .map((groupLabel) => {
                       const groupItems = result.hotspots
                         .filter((h) => h.group === groupLabel)
                         .filter((h) => filterRegion === 'all' || (h.region && h.region.startsWith('CDR')))
-                        .filter((h) => filterRisk === 'all' || h.final_risk === filterRisk || (filterRisk === 'High' && h.final_risk === 'Critical'))
+                        .filter((h) => filterRisk.length === 0 || filterRisk.includes(h.final_risk))
                         .filter((h) => filterChains.length === 0 || filterChains.includes(getChainAt(h.start)))
+                        .filter((h) => {
+                          if (filterRsaMin === 0 && filterRsaMax === 100) return true;
+                          const rsa = h.rsa;
+                          if (rsa == null || rsa < 0) return filterRsaMin === 0;
+                          const pct = rsa * 100;
+                          return pct >= filterRsaMin && pct <= filterRsaMax;
+                        })
                         .sort((a, b) => {
                           const ra = riskRank[a.final_risk] ?? 99;
                           const rb = riskRank[b.final_risk] ?? 99;

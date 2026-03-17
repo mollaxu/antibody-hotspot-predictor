@@ -7,33 +7,56 @@ import warnings
 # group 字段需与前端 groupOrder 完全一致
 # ═══════════════════════════════════════════════════════════════
 HOTSPOT_RULES = [
-    # 1. 脱酰胺
-    {"group": "1. 脱酰胺", "rule_name": "脱酰胺-NG",      "motif": "NG",      "regex": "NG",      "pattern": r"NG",      "risk": "High",   "category": "化学稳定性"},
-    {"group": "1. 脱酰胺", "rule_name": "脱酰胺-N[STHN]",  "motif": "N[STHN]", "regex": "N[STHN]", "pattern": r"N[STHN]", "risk": "Medium", "category": "化学稳定性"},
-    {"group": "1. 脱酰胺", "rule_name": "脱酰胺-N[AEV]",   "motif": "N[AEV]",  "regex": "N[AEV]",  "pattern": r"N[AEV]",  "risk": "Low",    "category": "化学稳定性"},
-    # 2. 氧化
-    {"group": "2. 氧化",   "rule_name": "氧化-Met",        "motif": "M",       "regex": "M",       "pattern": r"M",       "risk": "Medium", "category": "化学稳定性"},
-    {"group": "2. 氧化",   "rule_name": "氧化-Trp",        "motif": "W",       "regex": "W",       "pattern": r"W",       "risk": "Medium", "category": "化学稳定性"},
-    {"group": "2. 氧化",   "rule_name": "氧化-His/Cys",    "motif": "[HC]",    "regex": "[HC]",    "pattern": r"[HC]",    "risk": "Low",    "category": "化学稳定性"},
-    # 3. 异构化
-    {"group": "3. 异构化",  "rule_name": "异构化-DG",       "motif": "DG",      "regex": "DG",      "pattern": r"DG",      "risk": "High",   "category": "化学稳定性"},
-    {"group": "3. 异构化",  "rule_name": "异构化-D[STHD]",  "motif": "D[STHD]", "regex": "D[STHD]", "pattern": r"D[STHD]", "risk": "Medium", "category": "化学稳定性"},
-    # 4. 糖基化
-    {"group": "4. 糖基化",  "rule_name": "N-糖基化",        "motif": "N-X-S/T", "regex": "N[^P][ST]","pattern": r"N[^P][ST]","risk": "High",  "category": "安全性风险"},
-    {"group": "4. 糖基化",  "rule_name": "O-糖基化",        "motif": "[ST]",    "regex": "[ST]",    "pattern": r"[ST]",    "risk": "Medium", "category": "安全性风险"},
-    # 5. 游离巯基
-    {"group": "5. 游离巯基", "rule_name": "游离巯基-Cys",    "motif": "C",       "regex": "C",       "pattern": r"C",       "risk": "High",   "category": "安全性风险"},
-    # 6. 细胞粘附
-    {"group": "6. 细胞粘附", "rule_name": "细胞粘附-RGD/LDV/KGD","motif": "RGD|LDV|KGD","regex": "RGD|LDV|KGD","pattern": r"(?:RGD|LDV|KGD)","risk": "Medium","category": "安全性风险"},
-    # 7. 裂解
-    {"group": "7. 裂解",    "rule_name": "裂解-DP",         "motif": "DP",      "regex": "DP",      "pattern": r"DP",      "risk": "Medium", "category": "结构完整性"},
-    {"group": "7. 裂解",    "rule_name": "裂解-DK/EA/TS",   "motif": "DK|EA|TS","regex": "DK|EA|TS","pattern": r"(?:DK|EA|TS)","risk": "Low","category": "结构完整性"},
-    # 8. 蛋白水解
-    {"group": "8. 蛋白水解", "rule_name": "蛋白水解-TS/NP",  "motif": "TS|NP",   "regex": "TS|NP",   "pattern": r"(?:TS|NP)","risk": "Low",   "category": "其他风险"},
-    # 9. 环化
-    {"group": "9. 环化",    "rule_name": "环化-N端Q/E",     "motif": "^[QE]",   "regex": "^[QE]",   "pattern": r"^[QE]",   "risk": "Low",    "category": "其他风险"},
-    # 10. 糖基化终产物
-    {"group": "10. 糖基化终产物","rule_name": "糖基化终产物-Lys","motif": "K",    "regex": "K",       "pattern": r"K",       "risk": "Low",    "category": "其他风险"},
+    # 脱酰胺
+    {"group": "脱酰胺", "rule_name": "脱酰胺-NG", "motif": "NG", "regex": "NG", "pattern": r"NG", "risk": "High",   "category": "化学稳定性"},
+    {"group": "脱酰胺", "rule_name": "脱酰胺-NS", "motif": "NS", "regex": "NS", "pattern": r"NS", "risk": "Medium", "category": "化学稳定性"},
+    {"group": "脱酰胺", "rule_name": "脱酰胺-NT", "motif": "NT", "regex": "NT", "pattern": r"NT", "risk": "Medium", "category": "化学稳定性"},
+    {"group": "脱酰胺", "rule_name": "脱酰胺-NH", "motif": "NH", "regex": "NH", "pattern": r"NH", "risk": "Medium", "category": "化学稳定性"},
+    {"group": "脱酰胺", "rule_name": "脱酰胺-NN", "motif": "NN", "regex": "NN", "pattern": r"NN", "risk": "Medium", "category": "化学稳定性"},
+    {"group": "脱酰胺", "rule_name": "脱酰胺-NA", "motif": "NA", "regex": "NA", "pattern": r"NA", "risk": "Low",    "category": "化学稳定性"},
+    {"group": "脱酰胺", "rule_name": "脱酰胺-NE", "motif": "NE", "regex": "NE", "pattern": r"NE", "risk": "Low",    "category": "化学稳定性"},
+    {"group": "脱酰胺", "rule_name": "脱酰胺-NV", "motif": "NV", "regex": "NV", "pattern": r"NV", "risk": "Low",    "category": "化学稳定性"},
+    # 氧化
+    {"group": "氧化", "rule_name": "氧化-M",  "motif": "M", "regex": "M", "pattern": r"M", "risk": "Medium", "category": "化学稳定性"},
+    {"group": "氧化", "rule_name": "氧化-W",  "motif": "W", "regex": "W", "pattern": r"W", "risk": "Medium", "category": "化学稳定性"},
+    {"group": "氧化", "rule_name": "氧化-H",  "motif": "H", "regex": "H", "pattern": r"H", "risk": "Low",    "category": "化学稳定性"},
+    {"group": "氧化", "rule_name": "氧化-C",  "motif": "C", "regex": "C", "pattern": r"C", "risk": "Low",    "category": "化学稳定性"},
+    # 异构化
+    {"group": "异构化", "rule_name": "异构化-DG", "motif": "DG", "regex": "DG", "pattern": r"DG", "risk": "High",   "category": "化学稳定性"},
+    {"group": "异构化", "rule_name": "异构化-DS", "motif": "DS", "regex": "DS", "pattern": r"DS", "risk": "Medium", "category": "化学稳定性"},
+    {"group": "异构化", "rule_name": "异构化-DT", "motif": "DT", "regex": "DT", "pattern": r"DT", "risk": "Medium", "category": "化学稳定性"},
+    {"group": "异构化", "rule_name": "异构化-DH", "motif": "DH", "regex": "DH", "pattern": r"DH", "risk": "Medium", "category": "化学稳定性"},
+    {"group": "异构化", "rule_name": "异构化-DD", "motif": "DD", "regex": "DD", "pattern": r"DD", "risk": "Medium", "category": "化学稳定性"},
+    # 糖基化
+    {"group": "糖基化", "rule_name": "N-糖基化-NXT", "motif": "N-X-T", "regex": "N[^P]T", "pattern": r"N[^P]T", "risk": "High",   "category": "安全性风险"},
+    {"group": "糖基化", "rule_name": "N-糖基化-NXS", "motif": "N-X-S", "regex": "N[^P]S", "pattern": r"N[^P]S", "risk": "Medium", "category": "安全性风险"},
+    {"group": "糖基化", "rule_name": "O-糖基化-S",   "motif": "S",     "regex": "S",      "pattern": r"S",      "risk": "Medium", "category": "安全性风险"},
+    {"group": "糖基化", "rule_name": "O-糖基化-T",   "motif": "T",     "regex": "T",      "pattern": r"T",      "risk": "Medium", "category": "安全性风险"},
+    # 游离巯基（风险由 scan_sequence 动态判定：奇数 Cys → High，偶数 → 跳过）
+    {"group": "游离巯基", "rule_name": "游离巯基-Cys", "motif": "C", "regex": "C", "pattern": r"C", "risk": "High", "category": "安全性风险"},
+    # 细胞粘附
+    {"group": "细胞粘附", "rule_name": "细胞粘附-RGD", "motif": "RGD", "regex": "RGD", "pattern": r"RGD", "risk": "Medium", "category": "安全性风险"},
+    {"group": "细胞粘附", "rule_name": "细胞粘附-LDV", "motif": "LDV", "regex": "LDV", "pattern": r"LDV", "risk": "Medium", "category": "安全性风险"},
+    {"group": "细胞粘附", "rule_name": "细胞粘附-KGD", "motif": "KGD", "regex": "KGD", "pattern": r"KGD", "risk": "Medium", "category": "安全性风险"},
+    # 裂解
+    {"group": "裂解", "rule_name": "裂解-DP", "motif": "DP", "regex": "DP", "pattern": r"DP", "risk": "Medium", "category": "结构完整性"},
+    {"group": "裂解", "rule_name": "裂解-DK", "motif": "DK", "regex": "DK", "pattern": r"DK", "risk": "Low",    "category": "结构完整性"},
+    {"group": "裂解", "rule_name": "裂解-EA", "motif": "EA", "regex": "EA", "pattern": r"EA", "risk": "Low",    "category": "结构完整性"},
+    {"group": "裂解", "rule_name": "裂解-TS", "motif": "TS", "regex": "TS", "pattern": r"TS", "risk": "Low",    "category": "结构完整性"},
+    # 蛋白水解
+    {"group": "蛋白水解", "rule_name": "蛋白水解-TS", "motif": "TS", "regex": "TS", "pattern": r"TS", "risk": "Low", "category": "其他风险"},
+    {"group": "蛋白水解", "rule_name": "蛋白水解-NP", "motif": "NP", "regex": "NP", "pattern": r"NP", "risk": "Low", "category": "其他风险"},
+    # 环化
+    {"group": "环化", "rule_name": "环化-N端Q", "motif": "N端 Q", "regex": "^Q", "pattern": r"^Q", "risk": "Low", "category": "其他风险"},
+    {"group": "环化", "rule_name": "环化-N端E", "motif": "N端 E", "regex": "^E", "pattern": r"^E", "risk": "Low", "category": "其他风险"},
+    # 羟基化
+    {"group": "羟基化", "rule_name": "羟基化-KG", "motif": "KG", "regex": "KG", "pattern": r"KG", "risk": "High", "category": "其他风险"},
+    # 赖氨酸糖基化
+    {"group": "赖氨酸糖基化", "rule_name": "赖氨酸糖基化-KE", "motif": "KE", "regex": "KE", "pattern": r"KE", "risk": "Medium", "category": "其他风险"},
+    {"group": "赖氨酸糖基化", "rule_name": "赖氨酸糖基化-KD", "motif": "KD", "regex": "KD", "pattern": r"KD", "risk": "Medium", "category": "其他风险"},
+    {"group": "赖氨酸糖基化", "rule_name": "赖氨酸糖基化-KK", "motif": "KK", "regex": "KK", "pattern": r"KK", "risk": "Medium", "category": "其他风险"},
+    # 糖基化终产物（排除已被羟基化和赖氨酸糖基化覆盖的 KG/KE/KD/KK）
+    {"group": "糖基化终产物", "rule_name": "糖基化终产物-K", "motif": "K", "regex": "K", "pattern": r"K(?![GEDK])", "risk": "Low", "category": "其他风险"},
 ]
 
 # 标准氨基酸最大 ASA 参考值 (Å², Tien et al. 2013, 理论最大值)
@@ -174,13 +197,34 @@ def _assign_region_antibody(pos: int, seq_len: int) -> str:
 # 主扫描函数
 # ═══════════════════════════════════════════════════════════════
 
-def scan_sequence(sequence: str, pdb_text: str = None) -> dict:
+def scan_sequence(sequence: str, pdb_text: str = None,
+                   disabled_rules: list = None, risk_overrides: dict = None,
+                   extra_rules: list = None) -> dict:
     """扫描序列，返回所有命中的 PTM hotspot 位点。
 
     Args:
         sequence: 氨基酸序列
         pdb_text: 可选的 PDB 文本，用于计算真实 RSA
+        disabled_rules: 要跳过的 rule_name 列表
+        risk_overrides: {rule_name: new_risk} 用户自定义风险等级
+        extra_rules: 用户新增的自定义规则列表
     """
+    disabled_set = set(disabled_rules) if disabled_rules else set()
+    risk_map = risk_overrides or {}
+
+    # 合并用户自定义规则
+    all_rules = list(HOTSPOT_RULES)
+    if extra_rules:
+        for er in extra_rules:
+            all_rules.append({
+                "group":     er["group"],
+                "rule_name": f"custom-{er['group']}-{er['motif']}",
+                "motif":     er["motif"],
+                "regex":     er["pattern"],
+                "pattern":   er["pattern"],
+                "risk":      er["risk"],
+                "category":  "自定义",
+            })
     sequence = sequence.strip().upper()
     seq_len = len(sequence)
 
@@ -192,14 +236,26 @@ def scan_sequence(sequence: str, pdb_text: str = None) -> dict:
     rsa_list = _build_rsa_by_position(pdb_text) if pdb_text else []
     has_rsa = len(rsa_list) >= seq_len
 
-    # 3. 扫描 hotspot
+    # 3. 游离巯基：统计全序列 Cys 数量，偶数则跳过该规则
+    cys_count = sequence.count('C')
+    skip_free_cys = (cys_count % 2 == 0)  # 偶数个 Cys 无风险
+
+    # 4. 扫描 hotspot
     hotspots = []
     buried_filtered = []
 
-    for rule in HOTSPOT_RULES:
+    for rule in all_rules:
+        # 用户禁用的规则跳过
+        if rule["rule_name"] in disabled_set:
+            continue
+        # 游离巯基：偶数个 Cys 时整组跳过
+        if rule["group"] == "游离巯基" and skip_free_cys:
+            continue
+
         for match in re.finditer(rule["pattern"], sequence):
             pos = match.start()
-            base_risk = rule["risk"]
+            # 应用用户自定义风险等级
+            base_risk = risk_map.get(rule["rule_name"], rule["risk"])
 
             # 区域分配
             region = _assign_region_antibody(pos, seq_len) if is_antibody else "N/A"
