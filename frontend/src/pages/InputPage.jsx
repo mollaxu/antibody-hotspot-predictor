@@ -276,7 +276,7 @@ export default function InputPage() {
           {/* 编辑提示 */}
           {editing && (
             <div className="px-5 pt-3">
-              <p className="text-xs text-amber-500/80 leading-relaxed">
+              <p className="text-sm text-amber-500/80 leading-relaxed">
                 自定义规则存储在当前浏览器中，清除浏览器缓存将重置为默认规则。
               </p>
             </div>
@@ -360,7 +360,7 @@ export default function InputPage() {
             <label className="flex items-center justify-between cursor-pointer">
               <div>
                 <p className="text-sm text-slate-200">结构预测</p>
-                <p className="text-xs text-neutral-500 mt-0.5">使用 ESMFold 自动预测 3D 结构（序列 ≤ 400 残基）</p>
+                <p className="text-sm text-neutral-500 mt-0.5">使用 ESMFold 自动预测 3D 结构（序列 ≤ 400 残基）</p>
               </div>
               <div className={`relative w-10 h-5 rounded-full transition-colors ${enablePrediction ? 'bg-[#5D56C1]' : 'bg-slate-600'}`}
                 onClick={() => setEnablePrediction(v => !v)}>
@@ -375,10 +375,10 @@ export default function InputPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-slate-200">扫描规则</p>
-                  <p className="text-xs text-neutral-500 mt-0.5">查看和配置风险类型、基序及风险等级</p>
+                  <p className="text-sm text-neutral-500 mt-0.5">查看和配置风险类型、基序及风险等级</p>
                 </div>
                 <button type="button" onClick={() => setModalOpen(true)}
-                  className="text-xs rounded-lg bg-[#363636] hover:bg-[#404040] px-3 py-1.5 text-slate-200 transition-colors">
+                  className="text-sm rounded-lg bg-[#363636] hover:bg-[#404040] px-3 py-1.5 text-slate-200 transition-colors">
                   查看
                 </button>
               </div>

@@ -312,7 +312,7 @@ export default function ResultsPage() {
           </div>
 
           {result && (
-            <p className="shrink-0 text-xs text-slate-400 pb-2">
+            <p className="shrink-0 text-sm text-slate-400 pb-2">
               序列长度：{result.sequence_length}，命中位点：{result.hotspots?.length || 0} 个
             </p>
           )}
@@ -354,7 +354,7 @@ export default function ResultsPage() {
                             <h3 className="text-base font-bold tracking-wide text-slate-300 uppercase">
                               {displayLabel}
                             </h3>
-                            <span className="text-xs text-neutral-500">
+                            <span className="text-sm text-neutral-500">
                               共 {groupItems.length} 个风险位点
                             </span>
                           </div>
@@ -380,7 +380,7 @@ export default function ResultsPage() {
                                   onClick={() => setSelectedResidue((prev) => prev === h.start + 1 ? null : h.start + 1)}
                                 >
                                   <div className="flex items-center justify-between gap-2">
-                                    <div className="font-semibold text-slate-50 text-xs">
+                                    <div className="font-semibold text-slate-50 text-sm">
                                       基序：{h.motif}
                                     </div>
                                     <span
@@ -397,7 +397,7 @@ export default function ResultsPage() {
                                       {h.final_risk}
                                     </span>
                                   </div>
-                                  <div className="mt-1 text-xs text-slate-400 space-x-2">
+                                  <div className="mt-1 text-sm text-slate-400 space-x-2">
                                     {chainInfo.length > 0 && getChainAt(h.start) && (
                                       <span className="text-cyan-300">
                                         Chain {getChainAt(h.start)}
@@ -407,7 +407,7 @@ export default function ResultsPage() {
                                       {chainInfo.length > 0 && getChainAt(h.start) ? '| ' : ''}位点区间：{h.end - h.start === 1 ? h.start + 1 : `${h.start + 1} - ${h.end}`}
                                     </span>
                                   </div>
-                                  <div className="mt-1 text-xs text-slate-400 space-x-2">
+                                  <div className="mt-1 text-sm text-slate-400 space-x-2">
                                     {h.region && h.region !== 'N/A' && (
                                       <span className={h.region.startsWith('CDR') ? 'text-red-300' : 'text-slate-400'}>
                                         区域：{h.region}
@@ -431,7 +431,7 @@ export default function ResultsPage() {
               </div>
 
               {result.buried_filtered && result.buried_filtered.length > 0 && (
-                <p className="text-xs text-neutral-500">
+                <p className="text-sm text-neutral-500">
                   另有 {result.buried_filtered.length} 个命中位点因 RSA &lt; 5% 被归入"结构屏蔽清单"。
                 </p>
               )}
