@@ -103,6 +103,12 @@ function App() {
   const runScan = async (rawSeq) => {
     setError('');
     setResult(null);
+    setFilterGroup([]);
+    setFilterRisk([]);
+    setFilterRegion('all');
+    setFilterChains([]);
+    setFilterRsaMin(0);
+    setFilterRsaMax(100);
 
     const seq = cleanSequence(rawSeq || '');
     if (!seq) {
