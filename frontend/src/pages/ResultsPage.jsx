@@ -166,26 +166,6 @@ export default function ResultsPage() {
                     <div className="fixed inset-0 z-40" onClick={() => setFilterOpen(false)} />
                     <div className="absolute right-0 top-full mt-2 z-50 w-96 rounded-xl bg-[#1F1F1F] p-5 space-y-5 shadow-xl shadow-black/40 max-h-[80vh] overflow-y-auto">
 
-                      {/* 区域 */}
-                      {isAntibody && (
-                        <div className="space-y-2">
-                          <span className="text-xs font-medium text-neutral-400">区域</span>
-                          <div className="flex items-center rounded-lg bg-[#292929] p-0.5 text-xs">
-                            {[
-                              { value: 'all', label: '全部' },
-                              { value: 'cdr', label: 'CDR' },
-                              { value: 'fr',  label: 'FR' },
-                              { value: 'fc',  label: 'Fc' },
-                            ].map(({ value, label }) => (
-                              <button key={value} type="button" onClick={() => setFilterRegion(value)}
-                                className={`px-3 py-1.5 rounded-md transition-colors ${filterRegion === value ? 'bg-[#5D56C1] text-slate-50' : 'text-slate-400 hover:text-slate-200'}`}>
-                                {label}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
                       {/* 链 */}
                       {chainInfo.length > 0 && (
                         <div className="space-y-2">
@@ -254,6 +234,26 @@ export default function ResultsPage() {
                           })}
                         </div>
                       </div>
+
+                      {/* 区域 */}
+                      {isAntibody && (
+                        <div className="space-y-2">
+                          <span className="text-xs font-medium text-neutral-400">区域</span>
+                          <div className="flex items-center rounded-lg bg-[#292929] p-0.5 text-xs">
+                            {[
+                              { value: 'all', label: '全部' },
+                              { value: 'cdr', label: 'CDR' },
+                              { value: 'fr',  label: 'FR' },
+                              { value: 'fc',  label: 'Fc' },
+                            ].map(({ value, label }) => (
+                              <button key={value} type="button" onClick={() => setFilterRegion(value)}
+                                className={`flex-1 py-1.5 rounded-md text-center transition-colors ${filterRegion === value ? 'bg-[#5D56C1] text-slate-50' : 'text-slate-400 hover:text-slate-200'}`}>
+                                {label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
 
                       {/* RSA 滑块 */}
                       <div className="space-y-2.5">
