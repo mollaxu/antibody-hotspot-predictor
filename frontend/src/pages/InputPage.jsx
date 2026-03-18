@@ -63,6 +63,7 @@ export default function InputPage() {
   const ctx = useOutletContext();
   const navigate = useNavigate();
   const fileInputRef = useRef(null);
+  const pdbUploadedThisSession = useRef(false);
   const [enablePrediction, setEnablePrediction] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -171,6 +172,7 @@ export default function InputPage() {
       if (seqFromPdb) {
         setSequence(seqFromPdb); setChainInfo(chains); setPdbText(text);
         setPdbFileName(file.name); setPdbFormat(fmt); setPdbUrl(url);
+        pdbUploadedThisSession.current = true;
       } else { URL.revokeObjectURL(url); setError('无法解析该蛋白文件序列，请手动输入'); }
     };
     reader.readAsText(file);
@@ -180,8 +182,21 @@ export default function InputPage() {
     if (e) e.preventDefault();
     const seq = cleanSequence(sequence || '');
     if (!seq) { setError('请输入氨基酸序列。'); return; }
+
+    // 若本轮未主动上传 PDB，则清空上一轮残留的结构数据
+    const clearedPdb = pdbUrl && !pdbUploadedThisSession.current;
+    if (clearedPdb) {
+      URL.revokeObjectURL(pdbUrl);
+      setPdbUrl('');
+      setPdbText('');
+      setPdbFileName('');
+      setPdbFormat('pdb');
+      setChainInfo([]);
+    }
+    pdbUploadedThisSession.current = false;
+
     const scanPromise = runScan(sequence);
-    if (enablePrediction && !pdbUrl) predictStructure(sequence);
+    if (enablePrediction && (!pdbUrl || clearedPdb)) predictStructure(sequence);
     await scanPromise;
     navigate('/results');
   };
