@@ -171,10 +171,15 @@ export default function ResultsPage() {
                         <div className="space-y-2">
                           <span className="text-xs font-medium text-neutral-400">区域</span>
                           <div className="flex items-center rounded-lg bg-[#292929] p-0.5 text-xs">
-                            {['all', 'cdr'].map((v) => (
-                              <button key={v} type="button" onClick={() => setFilterRegion(v)}
-                                className={`px-3 py-1.5 rounded-md transition-colors ${filterRegion === v ? 'bg-[#5D56C1] text-slate-50' : 'text-slate-400 hover:text-slate-200'}`}>
-                                {v === 'all' ? '全部' : 'CDR'}
+                            {[
+                              { value: 'all', label: '全部' },
+                              { value: 'cdr', label: 'CDR' },
+                              { value: 'fr',  label: 'FR' },
+                              { value: 'fc',  label: 'Fc' },
+                            ].map(({ value, label }) => (
+                              <button key={value} type="button" onClick={() => setFilterRegion(value)}
+                                className={`px-3 py-1.5 rounded-md transition-colors ${filterRegion === value ? 'bg-[#5D56C1] text-slate-50' : 'text-slate-400 hover:text-slate-200'}`}>
+                                {label}
                               </button>
                             ))}
                           </div>
@@ -328,7 +333,13 @@ export default function ResultsPage() {
                       .map((groupLabel) => {
                       const groupItems = result.hotspots
                         .filter((h) => h.group === groupLabel)
-                        .filter((h) => filterRegion === 'all' || (h.region && h.region.startsWith('CDR')))
+                        .filter((h) => {
+                          if (filterRegion === 'all') return true;
+                          if (filterRegion === 'cdr') return h.region && h.region.startsWith('CDR');
+                          if (filterRegion === 'fr')  return h.region && h.region.startsWith('FR');
+                          if (filterRegion === 'fc')  return h.region === 'Fc';
+                          return true;
+                        })
                         .filter((h) => filterRisk.length === 0 || filterRisk.includes(h.final_risk))
                         .filter((h) => filterChains.length === 0 || filterChains.includes(getChainAt(h.start)))
                         .filter((h) => {
