@@ -211,7 +211,7 @@ export default function InputPage() {
         <div key={r.rule_name} className="flex items-center gap-3">
           <input type="checkbox" checked={cfg.enabled} onChange={() => toggleRule(r.rule_name)}
             className="w-3 h-3 rounded accent-[#5D56C1] cursor-pointer" />
-          <span className={`text-sm flex-1 font-mono ${cfg.enabled ? 'text-slate-300' : 'text-slate-500'}`}>{r.motif}</span>
+          <span translate="no" className={`text-sm flex-1 font-mono ${cfg.enabled ? 'text-slate-300' : 'text-slate-500'}`}>{r.motif}</span>
           <RiskBadge risk={cfg.risk} />
         </div>
       );
@@ -219,7 +219,7 @@ export default function InputPage() {
     return (
       <div key={r.rule_name} className="flex items-center gap-3">
         <span className="w-3 h-3" />
-        <span className="text-sm flex-1 font-mono text-slate-300">{r.motif}</span>
+        <span translate="no" className="text-sm flex-1 font-mono text-slate-300">{r.motif}</span>
         <select value={cfg.risk} onChange={e => changeRisk(r.rule_name, e.target.value)}
           className="text-sm rounded bg-[#1F1F1F] border border-[#3a3a3a] text-slate-300 px-1.5 py-0.5 cursor-pointer focus:outline-none focus:border-[#5D56C1]">
           {RISK_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
@@ -237,7 +237,7 @@ export default function InputPage() {
         <div key={r.id} className="flex items-center gap-3">
           <input type="checkbox" checked={enabled} onChange={() => toggleUserRule(r.id)}
             className="w-3 h-3 rounded accent-[#5D56C1] cursor-pointer" />
-          <span className={`text-sm flex-1 font-mono ${enabled ? 'text-slate-300' : 'text-slate-500'}`}>{r.motif}</span>
+          <span translate="no" className={`text-sm flex-1 font-mono ${enabled ? 'text-slate-300' : 'text-slate-500'}`}>{r.motif}</span>
           <RiskBadge risk={r.risk} />
         </div>
       );
@@ -245,7 +245,7 @@ export default function InputPage() {
     return (
       <div key={r.id} className="flex items-center gap-3">
         <span className="w-3 h-3" />
-        <span className={`text-sm flex-1 font-mono ${isPlaceholder ? 'text-slate-500 italic' : 'text-slate-300'}`}>{r.motif}</span>
+        <span translate="no" className={`text-sm flex-1 font-mono ${isPlaceholder ? 'text-slate-500 italic' : 'text-slate-300'}`}>{r.motif}</span>
         {!isPlaceholder && (
           <select value={r.risk} onChange={e => changeUserRisk(r.id, e.target.value)}
             className="text-sm rounded bg-[#1F1F1F] border border-[#3a3a3a] text-slate-300 px-1.5 py-0.5 cursor-pointer focus:outline-none focus:border-[#5D56C1]">

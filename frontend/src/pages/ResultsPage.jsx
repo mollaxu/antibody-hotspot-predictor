@@ -392,7 +392,7 @@ export default function ResultsPage() {
                                 >
                                   <div className="flex items-center justify-between gap-2">
                                     <div className="font-semibold text-slate-50 text-sm">
-                                      基序：{h.motif}
+                                      基序：<span translate="no">{h.motif}</span>
                                     </div>
                                     <span
                                       className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs ${
