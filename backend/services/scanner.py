@@ -252,7 +252,7 @@ def scan_sequence(sequence: str, pdb_text: str = None,
         if rule["group"] == "游离巯基" and skip_free_cys:
             continue
 
-        for match in re.finditer(rule["pattern"], sequence):
+        for match in re.finditer(rule["pattern"], sequence, re.IGNORECASE):
             pos = match.start()
             # 应用用户自定义风险等级
             base_risk = risk_map.get(rule["rule_name"], rule["risk"])
