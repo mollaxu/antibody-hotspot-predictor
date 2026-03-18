@@ -2,10 +2,30 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <title>Antibody Hotspot Predictor</title>
+    <title>Developability Liabilities</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   </head>
   <body class="bg-slate-900 text-slate-50">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/pdbe-molstar@3.10.1/build/pdbe-molstar.css"
+          onerror="this.href='https://unpkg.com/pdbe-molstar@3.10.1/build/pdbe-molstar.css'" />
+    <script>
+      // 异步加载 pdbe-molstar，主 CDN 失败时自动回退备用 CDN
+      (function() {
+        var urls = [
+          'https://cdn.jsdelivr.net/npm/pdbe-molstar@3.10.1/build/pdbe-molstar-plugin.js',
+          'https://unpkg.com/pdbe-molstar@3.10.1/build/pdbe-molstar-plugin.js'
+        ];
+        function tryLoad(i) {
+          if (i >= urls.length) return;
+          var s = document.createElement('script');
+          s.src = urls[i];
+          s.async = true;
+          s.onerror = function() { tryLoad(i + 1); };
+          document.head.appendChild(s);
+        }
+        tryLoad(0);
+      })();
+    </script>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
