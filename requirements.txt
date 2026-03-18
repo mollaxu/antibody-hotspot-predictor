@@ -1,6 +1,9 @@
 fastapi==0.115.0
+uvicorn==0.30.6
 pydantic==2.9.2
+biopython==1.84
+numpy<2.0.0
+scipy
+anarci
 python-multipart
-httpx
-biopython
-numpy
+requests
