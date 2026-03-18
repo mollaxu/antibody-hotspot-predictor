@@ -4,6 +4,5 @@ pydantic==2.9.2
 biopython==1.84
 numpy<2.0.0
 scipy
-anarci
 python-multipart
 requests

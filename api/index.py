@@ -10,15 +10,25 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
 
-from typing import Optional
-from backend.services.scanner import scan_sequence
+from typing import Optional, List, Dict
+from backend.services.scanner import scan_sequence, HOTSPOT_RULES
 
 ESMFOLD_URL = "https://api.esmatlas.com/foldSequence/v1/pdb/"
+
+
+class ExtraRule(BaseModel):
+    group: str
+    motif: str
+    pattern: str
+    risk: str
 
 
 class ScanRequest(BaseModel):
     sequence: str
     pdb_text: Optional[str] = None
+    disabled_rules: Optional[List[str]] = None
+    risk_overrides: Optional[Dict[str, str]] = None
+    extra_rules: Optional[List[ExtraRule]] = None
 
 
 class FoldRequest(BaseModel):
@@ -36,9 +46,25 @@ app.add_middleware(
 )
 
 
+@app.get("/api/rules")
+def get_rules():
+    """返回默认扫描规则表（供前端渲染自定义配置面板）。"""
+    return [
+        {"rule_name": r["rule_name"], "group": r["group"], "motif": r["motif"], "risk": r["risk"]}
+        for r in HOTSPOT_RULES
+    ]
+
+
 @app.post("/api/scan")
 def scan(req: ScanRequest):
-    result = scan_sequence(req.sequence, pdb_text=req.pdb_text)
+    extra = [r.model_dump() for r in req.extra_rules] if req.extra_rules else None
+    result = scan_sequence(
+        req.sequence,
+        pdb_text=req.pdb_text,
+        disabled_rules=req.disabled_rules,
+        risk_overrides=req.risk_overrides,
+        extra_rules=extra,
+    )
     return result
 
 
