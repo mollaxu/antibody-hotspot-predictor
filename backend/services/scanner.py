@@ -285,15 +285,13 @@ def scan_sequence(sequence: str, pdb_text: str = None,
                 })
                 continue
 
-            # CDR 风险提升
+            # CDR 风险提升：CDR 区 High/Medium 提升为 Critical
+            # 有结构时需 RSA > 0.20（暴露）才提升；无结构时保守地直接提升
             final_risk = base_risk
             if is_antibody and region.startswith("CDR"):
-                if rsa is not None and rsa > 0.20:
-                    if base_risk in ("High", "Medium"):
+                if base_risk in ("High", "Medium"):
+                    if rsa is None or rsa > 0.20:
                         final_risk = "Critical"
-                elif rsa is None:
-                    # 无结构时不做 RSA 相关提升
-                    pass
 
             hotspots.append({
                 "group":      rule["group"],
