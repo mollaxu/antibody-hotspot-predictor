@@ -408,18 +408,35 @@ export default function InputPage() {
             <div><p className="text-base font-bold text-slate-300">批量序列上传</p></div>
 
             {/* 上传区域 */}
-            <label className="flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-[#555555] hover:border-[#5D56C1] px-6 py-8 cursor-pointer transition-colors">
-              <svg className="w-8 h-8 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
-              </svg>
-              <span className="text-sm text-slate-400">点击上传 FASTA 或 Excel 文件</span>
-              <span className="text-xs text-neutral-500">.fasta · .fa · .xlsx · .xls</span>
-              <input ref={batchFileInputRef} type="file" accept=".fasta,.fa,.faa,.fas,.txt,.xlsx,.xls" className="hidden" onChange={handleBatchFileUpload} />
-            </label>
-
-            {batchFileName && !batchParseError && (
-              <p className="text-xs text-neutral-500">{batchFileName} · 已解析 {batchSequences.length} 条序列</p>
+            {batchFileName && !batchParseError ? (
+              /* 已上传状态 */
+              <div className="flex items-center gap-3 rounded-xl border border-[#3a3a3a] bg-[#1F1F1F] px-4 py-3.5">
+                <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-emerald-500/15 flex items-center justify-center">
+                  <svg className="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-slate-200 truncate" title={batchFileName}>{batchFileName}</p>
+                  <p className="text-xs text-neutral-500 mt-0.5">已解析 {batchSequences.length} 条序列</p>
+                </div>
+                <label className="shrink-0 text-xs text-[#8b85e0] hover:text-[#a9a4f0] cursor-pointer transition-colors">
+                  重新上传
+                  <input ref={batchFileInputRef} type="file" accept=".fasta,.fa,.faa,.fas,.txt,.xlsx,.xls" className="hidden" onChange={handleBatchFileUpload} />
+                </label>
+              </div>
+            ) : (
+              /* 未上传 / 解析错误状态 */
+              <label className="flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-[#555555] hover:border-[#5D56C1] px-6 py-8 cursor-pointer transition-colors">
+                <svg className="w-8 h-8 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+                </svg>
+                <span className="text-sm text-slate-400">点击上传 FASTA 或 Excel 文件</span>
+                <span className="text-xs text-neutral-500">.fasta · .fa · .xlsx · .xls</span>
+                <input ref={batchFileInputRef} type="file" accept=".fasta,.fa,.faa,.fas,.txt,.xlsx,.xls" className="hidden" onChange={handleBatchFileUpload} />
+              </label>
             )}
+
             {batchParseError && (
               <p className="text-sm text-red-400">{batchParseError}</p>
             )}

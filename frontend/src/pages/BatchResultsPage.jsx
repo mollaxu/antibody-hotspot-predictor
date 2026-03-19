@@ -1,5 +1,11 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useOutletContext, Navigate, useNavigate } from 'react-router-dom';
+import SequenceStrip from '../components/SequenceStrip.jsx';
+import ProteinViewer from '../ProteinViewer.jsx';
+
+const API_BASE =
+  import.meta?.env?.VITE_API_BASE_URL ||
+  (import.meta.env.DEV ? 'http://localhost:8000' : '/api');
 
 const groupOrder = [
   '脱酰胺', '氧化', '异构化', '糖基化',
@@ -363,7 +369,7 @@ function exportComparison(displayList, groups, matrix) {
 
 // ─── ComparisonTable ───────────────────────────────────────────────────────
 
-function ComparisonTable({ displayList, recommendedIds, groups = COLUMN_GROUPS }) {
+function ComparisonTable({ displayList, recommendedIds, groups = COLUMN_GROUPS, filterOpen, setFilterOpen, activeFilterCount = 0, filterBar }) {
   const allGroups = groups;
 
   // Build ruleName → count map per sequence
@@ -383,8 +389,26 @@ function ComparisonTable({ displayList, recommendedIds, groups = COLUMN_GROUPS }
 
   return (
     <div className="flex-1 flex flex-col min-h-0 gap-2">
-      {/* Export button */}
-      <div className="shrink-0 flex justify-end">
+      {/* Toolbar: Filter button + Export button */}
+      <div className="shrink-0 flex justify-end gap-2">
+        {/* Filter toggle */}
+        <button type="button" onClick={() => setFilterOpen(v => !v)}
+          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-colors border ${
+            filterOpen
+              ? 'bg-[#292929] border-[#5D56C1] text-slate-200'
+              : 'bg-[#1F1F1F] border-[#3a3a3a] text-slate-400 hover:text-slate-200 hover:border-[#555]'
+          }`}>
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M3 4h18M7 8h10M10 12h4" />
+          </svg>
+          筛选
+          {activeFilterCount > 0 && (
+            <span className="ml-0.5 min-w-[16px] h-4 flex items-center justify-center rounded-full bg-[#5D56C1] text-[10px] text-white px-1">
+              {activeFilterCount}
+            </span>
+          )}
+        </button>
+        {/* Export */}
         <button type="button" onClick={() => exportComparison(displayList, allGroups, matrix)}
           className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm bg-[#5D56C1] hover:bg-[#6e67d4] text-slate-50 transition-colors">
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -393,6 +417,12 @@ function ComparisonTable({ displayList, recommendedIds, groups = COLUMN_GROUPS }
           导出 CSV
         </button>
       </div>
+      {/* Collapsible filter panel */}
+      {filterOpen && filterBar && (
+        <div className="shrink-0 rounded-xl bg-[#1F1F1F] border border-[#3a3a3a]">
+          {filterBar}
+        </div>
+      )}
       <div className="flex-1 overflow-auto rounded-2xl bg-[#292929]">
       <table className="text-xs border-collapse" style={{ minWidth: '100%' }}>
         <thead className="sticky top-0 z-10">
@@ -401,7 +431,7 @@ function ComparisonTable({ displayList, recommendedIds, groups = COLUMN_GROUPS }
             <th rowSpan={2}
               className="sticky left-0 z-20 bg-[#1F1F1F] px-4 py-3 text-left text-sm font-bold text-slate-200 border-b border-r border-[#3a3a3a] whitespace-nowrap"
               style={{ minWidth: 200, width: 200 }}>
-              序列 / SEQUENCE
+              PROTEIN
             </th>
             <th rowSpan={2}
               className="sticky z-20 bg-[#1F1F1F] px-3 py-3 text-center text-sm font-bold text-slate-200 border-b border-r border-[#3a3a3a] whitespace-nowrap"
@@ -413,7 +443,7 @@ function ComparisonTable({ displayList, recommendedIds, groups = COLUMN_GROUPS }
             </th>
             {allGroups.map(g => (
               <th key={g.group} colSpan={g.motifs.length}
-                className={`px-2 py-2 text-center font-bold border-b border-r border-[#3a3a3a] whitespace-nowrap bg-[#1F1F1F] ${g.labelClass}`}>
+                className={`px-2 py-2 text-center text-sm font-bold border-b border-r border-[#3a3a3a] whitespace-nowrap bg-[#1F1F1F] ${g.labelClass}`}>
                 {g.isCustom ? `${g.group}（自定义）` : `${g.groupEn}(${g.group})`}
               </th>
             ))}
@@ -510,18 +540,46 @@ export default function BatchResultsPage() {
 
   const [selectedId, setSelectedId] = useState(batchSequences?.[0]?.id ?? null);
   const [viewMode, setViewMode] = useState('compare'); // 'compare' | 'detail'
-  // Filter state
+
+  // Compare-view filter state
+  const [filterOpen, setFilterOpen]         = useState(false);
   const [filterTopN, setFilterTopN]         = useState(0);
   const [filterScoreMin, setFilterScoreMin] = useState('');
   const [filterScoreMax, setFilterScoreMax] = useState('');
   const [hiddenGroups, setHiddenGroups]     = useState(new Set());
 
-  if (!batchSequences || batchSequences.length === 0) return <Navigate to="/" replace />;
+  // Detail-view structure prediction state
+  const [batchFolding, setBatchFolding]           = useState({}); // seqId → {status,pdbUrl,pdbText,error}
+  const [detailSelectedResidue, setDetailSelectedResidue] = useState(null);
+  const startedFoldRef = useRef(new Set());
 
-  const done  = batchResults.filter(r => r.status === 'done').length;
-  const total = batchSequences.length;
+  // Trigger ESMFold for one sequence in batch detail view
+  const predictBatchStructure = useCallback(async (seqId, sequence) => {
+    const seq = sequence.trim().toUpperCase();
+    if (seq.length > 400) {
+      setBatchFolding(prev => ({ ...prev, [seqId]: { status: 'error', pdbUrl: '', pdbText: '', error: '序列超过 400 残基，ESMFold 暂不支持' } }));
+      return;
+    }
+    setBatchFolding(prev => ({ ...prev, [seqId]: { status: 'loading', pdbUrl: '', pdbText: '', error: '' } }));
+    try {
+      const resp = await fetch(`${API_BASE}/fold`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sequence: seq }),
+      });
+      if (!resp.ok) throw new Error(`结构预测失败 [HTTP ${resp.status}]`);
+      const data = await resp.json();
+      const pdbContent = data.pdb;
+      if (!pdbContent || !pdbContent.includes('ATOM')) throw new Error('ESMFold 返回的结构数据无效');
+      const blob = new Blob([pdbContent], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      setBatchFolding(prev => ({ ...prev, [seqId]: { status: 'done', pdbUrl: url, pdbText: pdbContent, error: data.warning || '' } }));
+    } catch (e) {
+      setBatchFolding(prev => ({ ...prev, [seqId]: { status: 'error', pdbUrl: '', pdbText: '', error: e.message } }));
+    }
+  }, []);
 
-  // Attach scores, sort ascending (pending last)
+  // Attach scores, sort ascending (pending last) — must be before the useEffect that depends on it
   const scoredList = useMemo(() => {
     return batchSequences
       .map(s => {
@@ -611,6 +669,24 @@ export default function BatchResultsPage() {
     hiddenGroups.size === 0 ? allColumnGroups : allColumnGroups.filter(g => !hiddenGroups.has(g.group)),
   [allColumnGroups, hiddenGroups]);
 
+  // Auto-predict for top-10 sequences when detail view is first shown
+  useEffect(() => {
+    if (viewMode !== 'detail') return;
+    const top10 = scoredList.filter(({ score }) => score !== null).slice(0, 10);
+    top10.forEach(({ s }) => {
+      if (!startedFoldRef.current.has(s.id)) {
+        startedFoldRef.current.add(s.id);
+        predictBatchStructure(s.id, s.sequence);
+      }
+    });
+  }, [viewMode, scoredList, predictBatchStructure]);
+
+  // Early return after all hooks
+  if (!batchSequences || batchSequences.length === 0) return <Navigate to="/" replace />;
+
+  const done  = batchResults.filter(r => r.status === 'done').length;
+  const total = batchSequences.length;
+
   // Keep selected item valid across list reorders
   const displayIds = new Set(displayList.map(({ s }) => s.id));
   const effectiveSelectedId = displayIds.has(selectedId) ? selectedId : (displayList[0]?.s.id ?? null);
@@ -659,159 +735,195 @@ export default function BatchResultsPage() {
         </div>
       </div>
 
-      {/* ── Filter bar (compare mode only) ── */}
-      {viewMode === 'compare' && (
-        <div className="shrink-0 flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2.5 rounded-xl bg-[#292929]">
-
-          {/* 序列 */}
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-neutral-500 whitespace-nowrap">序列</span>
-            <div className="flex items-center rounded-lg bg-[#1F1F1F] p-0.5 text-xs">
-              {TOP_OPTIONS.map(opt => (
-                <button key={opt.value} type="button" onClick={() => setFilterTopN(opt.value)}
-                  className={`px-2.5 py-1 rounded-md transition-colors ${filterTopN === opt.value ? 'bg-[#5D56C1] text-slate-50' : 'text-slate-400 hover:text-slate-200'}`}>
-                  {opt.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="h-4 w-px bg-[#3a3a3a] shrink-0" />
-
-          {/* 风险评分 */}
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-neutral-500 whitespace-nowrap">风险评分</span>
-            <input type="number" min="0" placeholder="最低"
-              value={filterScoreMin} onChange={e => setFilterScoreMin(e.target.value)}
-              className="w-16 px-2 py-1 rounded-md bg-[#1F1F1F] border border-[#444] text-xs text-slate-200 placeholder-neutral-600 focus:outline-none focus:border-[#5D56C1]" />
-            <span className="text-neutral-600 text-xs">—</span>
-            <input type="number" min="0" placeholder="最高"
-              value={filterScoreMax} onChange={e => setFilterScoreMax(e.target.value)}
-              className="w-16 px-2 py-1 rounded-md bg-[#1F1F1F] border border-[#444] text-xs text-slate-200 placeholder-neutral-600 focus:outline-none focus:border-[#5D56C1]" />
-          </div>
-
-          <div className="h-4 w-px bg-[#3a3a3a] shrink-0" />
-
-          {/* 表头 */}
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-xs text-neutral-500 whitespace-nowrap">表头</span>
-            {allColumnGroups.map(g => {
-              const visible = !hiddenGroups.has(g.group);
-              return (
-                <button key={g.group} type="button"
-                  onClick={() => setHiddenGroups(prev => {
-                    const next = new Set(prev);
-                    visible ? next.add(g.group) : next.delete(g.group);
-                    return next;
-                  })}
-                  className={`px-2 py-0.5 rounded text-xs border transition-colors ${
-                    visible
-                      ? `${g.labelClass} border-current`
-                      : 'text-neutral-600 border-[#3a3a3a]'
-                  }`}>
-                  {g.group}
-                </button>
-              );
-            })}
-          </div>
-
-        </div>
-      )}
-
       {/* ── Compare view ── */}
-      {viewMode === 'compare' && (
-        <ComparisonTable displayList={displayList} recommendedIds={recommendedIds} groups={visibleColumnGroups} />
-      )}
+      {viewMode === 'compare' && (() => {
+        const activeFilterCount = (filterTopN > 0 ? 1 : 0) +
+          (filterScoreMin !== '' || filterScoreMax !== '' ? 1 : 0) +
+          hiddenGroups.size;
+        return (
+          <ComparisonTable
+            displayList={displayList}
+            recommendedIds={recommendedIds}
+            groups={visibleColumnGroups}
+            filterOpen={filterOpen}
+            setFilterOpen={setFilterOpen}
+            activeFilterCount={activeFilterCount}
+            filterBar={
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3">
+                {/* 序列 */}
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-neutral-500 whitespace-nowrap">序列</span>
+                  <div className="flex items-center rounded-lg bg-[#292929] p-0.5 text-xs">
+                    {TOP_OPTIONS.map(opt => (
+                      <button key={opt.value} type="button" onClick={() => setFilterTopN(opt.value)}
+                        className={`px-2.5 py-1 rounded-md transition-colors ${filterTopN === opt.value ? 'bg-[#5D56C1] text-slate-50' : 'text-slate-400 hover:text-slate-200'}`}>
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="h-4 w-px bg-[#3a3a3a] shrink-0" />
+                {/* 风险评分 */}
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-neutral-500 whitespace-nowrap">风险评分</span>
+                  <input type="number" min="0" placeholder="最低"
+                    value={filterScoreMin} onChange={e => setFilterScoreMin(e.target.value)}
+                    className="w-16 px-2 py-1 rounded-md bg-[#292929] border border-[#444] text-xs text-slate-200 placeholder-neutral-600 focus:outline-none focus:border-[#5D56C1]" />
+                  <span className="text-neutral-600 text-xs">—</span>
+                  <input type="number" min="0" placeholder="最高"
+                    value={filterScoreMax} onChange={e => setFilterScoreMax(e.target.value)}
+                    className="w-16 px-2 py-1 rounded-md bg-[#292929] border border-[#444] text-xs text-slate-200 placeholder-neutral-600 focus:outline-none focus:border-[#5D56C1]" />
+                </div>
+                <div className="h-4 w-px bg-[#3a3a3a] shrink-0" />
+                {/* 表头 */}
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs text-neutral-500 whitespace-nowrap">表头</span>
+                  {allColumnGroups.map(g => {
+                    const visible = !hiddenGroups.has(g.group);
+                    return (
+                      <button key={g.group} type="button"
+                        onClick={() => setHiddenGroups(prev => {
+                          const next = new Set(prev);
+                          visible ? next.add(g.group) : next.delete(g.group);
+                          return next;
+                        })}
+                        className={`px-2 py-0.5 rounded text-xs border transition-colors ${visible ? `${g.labelClass} border-current` : 'text-neutral-600 border-[#3a3a3a]'}`}>
+                        {g.group}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            }
+          />
+        );
+      })()}
 
       {/* ── Detail view ── */}
-      {viewMode === 'detail' && (
-        <div className="flex gap-4 flex-1 min-h-0">
+      {viewMode === 'detail' && (() => {
+        const fold = batchFolding[effectiveSelectedId] ?? { status: 'idle' };
+        const isTop10 = scoredList.filter(({ score }) => score !== null).slice(0, 10).some(({ s }) => s.id === effectiveSelectedId);
+        const curIdx = displayList.findIndex(({ s }) => s.id === effectiveSelectedId);
 
-          {/* Left: sequence list */}
-          <div className="w-[300px] shrink-0 rounded-2xl bg-[#292929] flex flex-col overflow-hidden">
-            <div className="shrink-0 px-4 pt-4 pb-3 border-b border-[#333] space-y-1">
-              <h2 className="text-base font-bold text-slate-100">序列列表</h2>
+        return (
+          <div className="flex flex-col flex-1 min-h-0 gap-2">
+
+            {/* Sequence switcher */}
+            <div className="shrink-0 flex items-center gap-3 px-1">
+              <button type="button" disabled={curIdx <= 0}
+                onClick={() => setSelectedId(displayList[curIdx - 1].s.id)}
+                className="p-1 rounded text-slate-400 hover:text-slate-200 disabled:opacity-30 transition-colors">
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                </svg>
+              </button>
+              <div className="flex-1 flex items-center gap-2 min-w-0">
+                <h2 className="text-base font-bold text-slate-100 truncate">{selectedEntry?.s.name}</h2>
+                {proteinType && (
+                  <span className={`text-xs px-2 py-0.5 rounded-full shrink-0 ${
+                    isAntibody ? 'bg-blue-500/20 text-blue-300'
+                    : proteinType === 'Peptide' ? 'bg-purple-500/20 text-purple-300'
+                    : 'bg-emerald-500/20 text-emerald-300'
+                  }`}>{proteinType}</span>
+                )}
+                {selectedEntry && recommendedIds.has(selectedEntry.s.id) && (
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 shrink-0">Recommended</span>
+                )}
+              </div>
+              <span className="text-xs text-neutral-500 shrink-0">{curIdx + 1} / {displayList.length}</span>
+              <button type="button" disabled={curIdx >= displayList.length - 1}
+                onClick={() => setSelectedId(displayList[curIdx + 1].s.id)}
+                className="p-1 rounded text-slate-400 hover:text-slate-200 disabled:opacity-30 transition-colors">
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto divide-y divide-[#333]">
-              {displayList.map(({ s, r, score }) => {
-                const isRecommended = recommendedIds.has(s.id);
-                const isActive = s.id === effectiveSelectedId;
-                const risk = r?.status === 'done' ? topRisk(r.result) : null;
+            {/* Main layout: left sequence+3D / right scan results */}
+            <div className="flex gap-4 flex-1 min-h-0">
 
-                return (
-                  <button key={s.id} type="button"
-                    onClick={() => setSelectedId(s.id)}
-                    className={`w-full text-left px-4 py-3 transition-colors ${
-                      isActive
-                        ? isRecommended ? 'bg-emerald-900/40' : 'bg-[#3b3b3b]'
-                        : isRecommended ? 'bg-emerald-900/20 hover:bg-emerald-900/30' : 'hover:bg-[#333]'
-                    }`}>
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-sm text-slate-200 truncate flex-1" title={s.name}>{s.name}</span>
-                      {isRecommended && (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 shrink-0">
-                          Recommended
-                        </span>
+              {/* Left: sequence strip + 3D viewer */}
+              <div className="w-[55%] shrink-0 rounded-2xl bg-[#292929] px-4 py-5 flex flex-col gap-3 overflow-hidden">
+                <SequenceStrip
+                  sequence={selectedEntry?.s.sequence ?? ''}
+                  hotspots={selectedResult?.result?.hotspots}
+                  selectedResidue={detailSelectedResidue}
+                  onSelectResidue={setDetailSelectedResidue}
+                  chainInfo={[]}
+                />
+                <div className="flex-1 rounded-xl overflow-hidden relative bg-[#1a1a1a]">
+                  {fold.status === 'idle' && (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
+                      <p className="text-sm text-slate-400">
+                        {isTop10 ? '结构预测准备中…' : '该序列不在 Top 10 范围内'}
+                      </p>
+                      {!isTop10 && (
+                        <button type="button"
+                          onClick={() => {
+                            startedFoldRef.current.add(effectiveSelectedId);
+                            predictBatchStructure(effectiveSelectedId, selectedEntry?.s.sequence ?? '');
+                          }}
+                          className="px-4 py-2 rounded-lg bg-[#5D56C1] hover:bg-[#6e67d4] text-sm text-slate-50 transition-colors">
+                          开始结构预测
+                        </button>
                       )}
                     </div>
-                    <div className="mt-1 flex items-center justify-between text-xs text-neutral-500">
-                      <span>{s.sequence.length} aa</span>
-                      <div className="flex items-center gap-2">
-                        {risk && <span className={riskColor[risk]}>{risk}</span>}
-                        {score !== null
-                          ? <span className="text-slate-400">风险评分 <span className="text-slate-200 font-mono">{score}</span></span>
-                          : r?.status === 'error'
-                            ? <span className="text-red-400">失败</span>
-                            : <span className="text-neutral-600">等待</span>}
+                  )}
+                  {fold.status === 'loading' && (
+                    <div className="absolute inset-0 z-10 flex items-center justify-center bg-[#181818]/90 rounded-xl">
+                      <div className="text-center space-y-3">
+                        <div className="inline-block w-8 h-8 border-2 border-slate-500 border-t-cyan-400 rounded-full animate-spin" />
+                        <p className="text-sm text-slate-300">结构预测中…预计需要 10–30 秒</p>
+                        <p className="text-xs text-neutral-500">由 ESMFold 提供预测服务</p>
                       </div>
                     </div>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Right: scan result detail */}
-          <div className="flex-1 rounded-2xl bg-[#292929] px-5 py-4 flex flex-col overflow-hidden min-w-0">
-            <div className="shrink-0 flex items-center gap-2 pb-3 border-b border-[#333]">
-              <h2 className="text-base font-bold text-slate-100 truncate">{selectedEntry?.s.name}</h2>
-              {proteinType && (
-                <span className={`text-xs px-2 py-0.5 rounded-full shrink-0 ${
-                  isAntibody ? 'bg-blue-500/20 text-blue-300'
-                  : proteinType === 'Peptide' ? 'bg-purple-500/20 text-purple-300'
-                  : 'bg-emerald-500/20 text-emerald-300'
-                }`}>{proteinType}</span>
-              )}
-              {selectedEntry && recommendedIds.has(selectedEntry.s.id) && (
-                <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 shrink-0">
-                  Recommended
-                </span>
-              )}
-              {selectedEntry?.score !== null && selectedEntry?.score !== undefined && (
-                <span className="ml-auto text-sm text-slate-400 shrink-0">
-                  风险得分：<span className="text-slate-100 font-mono font-semibold">{selectedEntry.score}</span>
-                </span>
-              )}
-            </div>
-
-            {selectedResult?.result && (
-              <p className="shrink-0 text-sm text-slate-400 py-2">
-                序列长度：{selectedResult.result.sequence_length}，命中位点：{selectedResult.result.hotspots?.length || 0} 个
-              </p>
-            )}
-
-            {selectedResult?.status === 'error' ? (
-              <div className="flex-1 flex items-center justify-center text-sm text-red-400">
-                扫描失败：{selectedResult.error}
+                  )}
+                  {fold.status === 'error' && (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
+                      <p className="text-sm text-red-400 px-4 text-center">{fold.error}</p>
+                      <button type="button"
+                        onClick={() => predictBatchStructure(effectiveSelectedId, selectedEntry?.s.sequence ?? '')}
+                        className="px-3 py-1.5 rounded-lg text-xs bg-[#292929] border border-[#444] text-slate-300 hover:text-slate-100 transition-colors">
+                        重试
+                      </button>
+                    </div>
+                  )}
+                  {fold.status === 'done' && fold.error && (
+                    <div className="absolute top-2 left-2 right-2 z-10">
+                      <p className="text-xs text-amber-300 bg-amber-500/10 rounded-lg px-3 py-1.5">⚠ {fold.error}</p>
+                    </div>
+                  )}
+                  <ProteinViewer
+                    pdbUrl={fold.pdbUrl ?? ''}
+                    pdbFormat="pdb"
+                    pdbText={fold.pdbText ?? ''}
+                    selectedResidue={detailSelectedResidue}
+                    proteinType={proteinType}
+                  />
+                </div>
               </div>
-            ) : (
-              <HotspotList result={selectedResult?.result ?? null} />
-            )}
-          </div>
 
-        </div>
-      )}
+              {/* Right: scan results */}
+              <div className="flex-1 rounded-2xl bg-[#292929] px-5 py-4 flex flex-col overflow-hidden min-w-0">
+                <div className="shrink-0 pb-3 border-b border-[#333]">
+                  <p className="text-sm text-slate-400">
+                    序列长度：{selectedResult?.result?.sequence_length ?? '—'}，命中位点：{selectedResult?.result?.hotspots?.length ?? 0} 个
+                  </p>
+                </div>
+                {selectedResult?.status === 'error' ? (
+                  <div className="flex-1 flex items-center justify-center text-sm text-red-400">
+                    扫描失败：{selectedResult.error}
+                  </div>
+                ) : (
+                  <HotspotList result={selectedResult?.result ?? null} />
+                )}
+              </div>
+
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
