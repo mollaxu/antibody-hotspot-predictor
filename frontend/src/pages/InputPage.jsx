@@ -384,21 +384,20 @@ export default function InputPage() {
             </label>
           </div>
 
-          {/* 扫描规则 — 查看按钮 */}
-          {defaultRules.length > 0 && (
-            <div className="rounded-xl bg-[#1F1F1F] px-4 py-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-slate-200">扫描规则</p>
-                  <p className="text-sm text-neutral-500 mt-0.5">查看和配置风险类型、基序及风险等级</p>
-                </div>
-                <button type="button" onClick={() => setModalOpen(true)}
-                  className="text-sm rounded-lg bg-[#363636] hover:bg-[#404040] px-3 py-1.5 text-slate-200 transition-colors">
-                  查看
-                </button>
+          {/* 扫描规则 — 查看按钮（始终显示，规则加载完成前禁用） */}
+          <div className="rounded-xl bg-[#1F1F1F] px-4 py-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-slate-200">扫描规则</p>
+                <p className="text-sm text-neutral-500 mt-0.5">查看和配置风险类型、基序及风险等级</p>
               </div>
+              <button type="button" onClick={() => setModalOpen(true)}
+                disabled={defaultRules.length === 0}
+                className="text-sm rounded-lg bg-[#363636] hover:bg-[#404040] disabled:opacity-40 disabled:cursor-not-allowed px-3 py-1.5 text-slate-200 transition-colors">
+                查看
+              </button>
             </div>
-          )}
+          </div>
 
           <div className="flex items-center gap-3">
             <button type="submit" disabled={loading}
