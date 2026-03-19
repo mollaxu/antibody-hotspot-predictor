@@ -877,7 +877,7 @@ export default function BatchResultsPage() {
                 />
                 <div className="flex-1 rounded-xl overflow-hidden relative bg-[#1a1a1a]">
                   {fold.status === 'idle' && (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
+                    <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3">
                       <p className="text-sm text-slate-400">
                         {isTop10 ? '结构预测准备中…' : '该序列不在 Top 10 范围内'}
                       </p>
