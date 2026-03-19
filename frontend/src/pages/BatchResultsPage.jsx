@@ -958,13 +958,15 @@ export default function BatchResultsPage() {
                       <p className="text-xs text-amber-300 bg-amber-500/10 rounded-lg px-3 py-1.5">⚠ {fold.error}</p>
                     </div>
                   )}
-                  <ProteinViewer
-                    pdbUrl={fold.pdbUrl ?? ''}
-                    pdbFormat="pdb"
-                    pdbText={fold.pdbText ?? ''}
-                    selectedResidue={detailSelectedResidue}
-                    proteinType={proteinType}
-                  />
+                  {fold.status === 'done' && (
+                    <ProteinViewer
+                      pdbUrl={fold.pdbUrl ?? ''}
+                      pdbFormat="pdb"
+                      pdbText={fold.pdbText ?? ''}
+                      selectedResidue={detailSelectedResidue}
+                      proteinType={proteinType}
+                    />
+                  )}
                 </div>
               </div>
 
