@@ -382,51 +382,6 @@ function ComparisonTable({ displayList, recommendedIds }) {
         </thead>
 
         <tbody>
-          {/* Reference row: Antibody CDR */}
-          <tr className="bg-[#1a2438]">
-            <td className="sticky left-0 bg-[#1a2438] px-4 py-2 border-b border-r border-[#3a3a3a] whitespace-nowrap" style={{ width: 200 }}>
-              <div className="text-[10px] text-slate-500 mb-0.5">参考频率</div>
-              <span className="text-slate-300 font-medium">Antibody CDR</span>
-            </td>
-            <td className="sticky bg-[#1a2438] px-3 py-2 text-center border-b border-r border-[#3a3a3a] text-slate-500"
-              style={{ left: 200 }}>—</td>
-            {COLUMN_GROUPS.map(g =>
-              g.motifs.map((m, mi) => {
-                const freq = g.cdrFreq[mi];
-                return (
-                  <td key={m.ruleName}
-                    className={`px-2 py-2 text-center border-b ${mi === g.motifs.length - 1 ? 'border-r' : ''} border-[#3a3a3a] text-slate-400`}>
-                    {freq !== null && freq !== undefined ? `${freq}%` : '—'}
-                  </td>
-                );
-              })
-            )}
-          </tr>
-
-          {/* Reference row: Germline CDR */}
-          <tr className="bg-[#1a2438]">
-            <td className="sticky left-0 bg-[#1a2438] px-4 py-2 border-b border-r border-[#3a3a3a] whitespace-nowrap" style={{ width: 200 }}>
-              <div className="text-[10px] text-slate-500 mb-0.5">参考频率</div>
-              <span className="text-slate-300 font-medium">Germline CDR</span>
-            </td>
-            <td className="sticky bg-[#1a2438] px-3 py-2 text-center border-b border-r border-[#3a3a3a] text-slate-500"
-              style={{ left: 200 }}>—</td>
-            {COLUMN_GROUPS.map(g =>
-              g.motifs.map((m, mi) => {
-                const freq = g.germFreq[mi];
-                return (
-                  <td key={m.ruleName}
-                    className={`px-2 py-2 text-center border-b ${mi === g.motifs.length - 1 ? 'border-r' : ''} border-[#3a3a3a] text-slate-400`}>
-                    {freq !== null && freq !== undefined ? `${freq}%` : '—'}
-                  </td>
-                );
-              })
-            )}
-          </tr>
-
-          {/* Divider */}
-          <tr><td colSpan={2 + COLUMN_GROUPS.reduce((s, g) => s + g.motifs.length, 0)} className="h-px bg-[#444]" /></tr>
-
           {/* Data rows */}
           {displayList.map(({ s, r, score }) => {
             const isRecommended = recommendedIds.has(s.id);
