@@ -21,7 +21,7 @@ const riskColor = {
   Low:      'text-yellow-300',
 };
 
-// Tooltip icon next to the 得分 header
+// Tooltip icon next to the 风险评分 header
 function ScoreTooltip() {
   return (
     <span className="relative group inline-flex items-center cursor-help">
@@ -356,7 +356,7 @@ function ComparisonTable({ displayList, recommendedIds }) {
               className="sticky z-20 bg-[#1F1F1F] px-3 py-3 text-center text-sm font-bold text-slate-200 border-b border-r border-[#3a3a3a] whitespace-nowrap"
               style={{ left: 200, minWidth: 72, width: 72 }}>
               <div className="flex items-center justify-center gap-1">
-                得分
+                风险评分
                 <ScoreTooltip />
               </div>
             </th>
@@ -596,7 +596,7 @@ export default function BatchResultsPage() {
                       <div className="flex items-center gap-2">
                         {risk && <span className={riskColor[risk]}>{risk}</span>}
                         {score !== null
-                          ? <span className="text-slate-400">得分 <span className="text-slate-200 font-mono">{score}</span></span>
+                          ? <span className="text-slate-400">风险评分 <span className="text-slate-200 font-mono">{score}</span></span>
                           : r?.status === 'error'
                             ? <span className="text-red-400">失败</span>
                             : <span className="text-neutral-600">等待</span>}
