@@ -325,7 +325,9 @@ function HotspotList({ result }) {
 
 // ─── ComparisonTable ───────────────────────────────────────────────────────
 
-function ComparisonTable({ displayList, recommendedIds }) {
+function ComparisonTable({ displayList, recommendedIds, customGroups = [] }) {
+  const allGroups = [...COLUMN_GROUPS, ...customGroups];
+
   // Build ruleName → count map per sequence
   const matrix = useMemo(() => {
     const result = {};
@@ -360,16 +362,16 @@ function ComparisonTable({ displayList, recommendedIds }) {
                 <ScoreTooltip />
               </div>
             </th>
-            {COLUMN_GROUPS.map(g => (
+            {allGroups.map(g => (
               <th key={g.group} colSpan={g.motifs.length}
                 className={`px-2 py-2 text-center font-bold border-b border-r border-[#3a3a3a] whitespace-nowrap bg-[#1F1F1F] ${g.labelClass}`}>
-                {g.groupEn}({g.group})
+                {g.isCustom ? `${g.group}（自定义）` : `${g.groupEn}(${g.group})`}
               </th>
             ))}
           </tr>
           {/* Row 2: motif sub-headers */}
           <tr>
-            {COLUMN_GROUPS.map(g =>
+            {allGroups.map(g =>
               g.motifs.map((m, mi) => (
                 <th key={m.ruleName}
                   className={`px-3 py-1.5 text-center font-mono font-semibold border-b border-[#3a3a3a] whitespace-nowrap bg-[#1F1F1F] ${mi === g.motifs.length - 1 ? 'border-r' : ''} ${cellRiskColor[m.risk]}`}
@@ -412,7 +414,7 @@ function ComparisonTable({ displayList, recommendedIds }) {
                       : <span className="text-neutral-600 text-[10px]">…</span>}
                 </td>
                 {/* Motif counts */}
-                {COLUMN_GROUPS.map(g =>
+                {allGroups.map(g =>
                   g.motifs.map((m, mi) => {
                     const count = counts[m.ruleName] || 0;
                     return (
@@ -487,6 +489,31 @@ export default function BatchResultsPage() {
     );
   }, [scoredList]);
 
+  // Derive custom column groups from scan results (rules starting with "custom-")
+  const customColumnGroups = useMemo(() => {
+    const motifMap = new Map(); // ruleName → {key, ruleName, risk}
+    for (const { r } of scoredList) {
+      if (r?.status !== 'done' || !r.result?.hotspots) continue;
+      for (const h of r.result.hotspots) {
+        if (!h.rule_name?.startsWith('custom-') || motifMap.has(h.rule_name)) continue;
+        const group = h.group || '自定义';
+        const prefix = `custom-${group}-`;
+        const key = h.rule_name.startsWith(prefix)
+          ? h.rule_name.slice(prefix.length)
+          : h.rule_name;
+        motifMap.set(h.rule_name, { key, ruleName: h.rule_name, risk: h.base_risk || 'Medium' });
+      }
+    }
+    if (motifMap.size === 0) return [];
+    return [{
+      group: '自定义',
+      groupEn: 'Custom',
+      labelClass: 'text-violet-300',
+      motifs: [...motifMap.values()],
+      isCustom: true,
+    }];
+  }, [scoredList]);
+
   // Apply Top N filter
   const displayList = useMemo(() => {
     if (topN === 0) return scoredList;
@@ -556,7 +583,7 @@ export default function BatchResultsPage() {
 
       {/* ── Compare view ── */}
       {viewMode === 'compare' && (
-        <ComparisonTable displayList={displayList} recommendedIds={recommendedIds} />
+        <ComparisonTable displayList={displayList} recommendedIds={recommendedIds} customGroups={customColumnGroups} />
       )}
 
       {/* ── Detail view ── */}
