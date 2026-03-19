@@ -548,8 +548,9 @@ export default function BatchResultsPage() {
   const [filterScoreMax, setFilterScoreMax] = useState('');
   const [hiddenGroups, setHiddenGroups]     = useState(new Set());
 
-  // Detail-view structure prediction state
-  const [batchFolding, setBatchFolding]           = useState({}); // seqId → {status,pdbUrl,pdbText,error}
+  // Detail-view state
+  const [detailSortOrder, setDetailSortOrder]             = useState('asc'); // 'asc' | 'desc'
+  const [batchFolding, setBatchFolding]                   = useState({}); // seqId → {status,pdbUrl,pdbText,error}
   const [detailSelectedResidue, setDetailSelectedResidue] = useState(null);
   const startedFoldRef = useRef(new Set());
 
@@ -664,6 +665,11 @@ export default function BatchResultsPage() {
     return list;
   }, [scoredList, filterTopN, filterScoreMin, filterScoreMax]);
 
+  // Detail-view ordered list (respects sort toggle)
+  const detailList = useMemo(() =>
+    detailSortOrder === 'asc' ? displayList : [...displayList].reverse(),
+  [displayList, detailSortOrder]);
+
   // Visible column groups (hide toggled-off groups)
   const visibleColumnGroups = useMemo(() =>
     hiddenGroups.size === 0 ? allColumnGroups : allColumnGroups.filter(g => !hiddenGroups.has(g.group)),
@@ -749,10 +755,10 @@ export default function BatchResultsPage() {
             setFilterOpen={setFilterOpen}
             activeFilterCount={activeFilterCount}
             filterBar={
-              <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3">
+              <div className="flex flex-col gap-3 px-4 py-3">
                 {/* 序列 */}
                 <div className="flex items-center gap-2">
-                  <span className="text-xs text-neutral-500 whitespace-nowrap">序列</span>
+                  <span className="text-xs text-neutral-500 w-14 shrink-0">序列</span>
                   <div className="flex items-center rounded-lg bg-[#292929] p-0.5 text-xs">
                     {TOP_OPTIONS.map(opt => (
                       <button key={opt.value} type="button" onClick={() => setFilterTopN(opt.value)}
@@ -762,10 +768,9 @@ export default function BatchResultsPage() {
                     ))}
                   </div>
                 </div>
-                <div className="h-4 w-px bg-[#3a3a3a] shrink-0" />
                 {/* 风险评分 */}
                 <div className="flex items-center gap-2">
-                  <span className="text-xs text-neutral-500 whitespace-nowrap">风险评分</span>
+                  <span className="text-xs text-neutral-500 w-14 shrink-0">风险评分</span>
                   <input type="number" min="0" placeholder="最低"
                     value={filterScoreMin} onChange={e => setFilterScoreMin(e.target.value)}
                     className="w-16 px-2 py-1 rounded-md bg-[#292929] border border-[#444] text-xs text-slate-200 placeholder-neutral-600 focus:outline-none focus:border-[#5D56C1]" />
@@ -774,24 +779,25 @@ export default function BatchResultsPage() {
                     value={filterScoreMax} onChange={e => setFilterScoreMax(e.target.value)}
                     className="w-16 px-2 py-1 rounded-md bg-[#292929] border border-[#444] text-xs text-slate-200 placeholder-neutral-600 focus:outline-none focus:border-[#5D56C1]" />
                 </div>
-                <div className="h-4 w-px bg-[#3a3a3a] shrink-0" />
                 {/* 表头 */}
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-xs text-neutral-500 whitespace-nowrap">表头</span>
-                  {allColumnGroups.map(g => {
-                    const visible = !hiddenGroups.has(g.group);
-                    return (
-                      <button key={g.group} type="button"
-                        onClick={() => setHiddenGroups(prev => {
-                          const next = new Set(prev);
-                          visible ? next.add(g.group) : next.delete(g.group);
-                          return next;
-                        })}
-                        className={`px-2 py-0.5 rounded text-xs border transition-colors ${visible ? `${g.labelClass} border-current` : 'text-neutral-600 border-[#3a3a3a]'}`}>
-                        {g.group}
-                      </button>
-                    );
-                  })}
+                <div className="flex items-start gap-2 flex-wrap">
+                  <span className="text-xs text-neutral-500 w-14 shrink-0 pt-0.5">表头</span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {allColumnGroups.map(g => {
+                      const visible = !hiddenGroups.has(g.group);
+                      return (
+                        <button key={g.group} type="button"
+                          onClick={() => setHiddenGroups(prev => {
+                            const next = new Set(prev);
+                            visible ? next.add(g.group) : next.delete(g.group);
+                            return next;
+                          })}
+                          className={`px-2 py-0.5 rounded text-xs border transition-colors ${visible ? `${g.labelClass} border-current` : 'text-neutral-600 border-[#3a3a3a]'}`}>
+                          {g.group}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
             }
@@ -803,41 +809,58 @@ export default function BatchResultsPage() {
       {viewMode === 'detail' && (() => {
         const fold = batchFolding[effectiveSelectedId] ?? { status: 'idle' };
         const isTop10 = scoredList.filter(({ score }) => score !== null).slice(0, 10).some(({ s }) => s.id === effectiveSelectedId);
-        const curIdx = displayList.findIndex(({ s }) => s.id === effectiveSelectedId);
+        const curIdx = detailList.findIndex(({ s }) => s.id === effectiveSelectedId);
 
         return (
           <div className="flex flex-col flex-1 min-h-0 gap-2">
 
             {/* Sequence switcher */}
-            <div className="shrink-0 flex items-center gap-3 px-1">
-              <button type="button" disabled={curIdx <= 0}
-                onClick={() => setSelectedId(displayList[curIdx - 1].s.id)}
-                className="p-1 rounded text-slate-400 hover:text-slate-200 disabled:opacity-30 transition-colors">
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+            <div className="shrink-0 flex items-center gap-2 px-1">
+              {/* Protein name + badges */}
+              <h2 className="text-base font-bold text-slate-100 truncate min-w-0 flex-1">{selectedEntry?.s.name}</h2>
+              {proteinType && (
+                <span className={`text-xs px-2 py-0.5 rounded-full shrink-0 ${
+                  isAntibody ? 'bg-blue-500/20 text-blue-300'
+                  : proteinType === 'Peptide' ? 'bg-purple-500/20 text-purple-300'
+                  : 'bg-emerald-500/20 text-emerald-300'
+                }`}>{proteinType}</span>
+              )}
+              {selectedEntry && recommendedIds.has(selectedEntry.s.id) && (
+                <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 shrink-0">Recommended</span>
+              )}
+              {/* Divider */}
+              <div className="h-4 w-px bg-[#3a3a3a] shrink-0 mx-1" />
+              {/* Sort toggle */}
+              <button type="button"
+                onClick={() => setDetailSortOrder(o => o === 'asc' ? 'desc' : 'asc')}
+                title={detailSortOrder === 'asc' ? '当前：风险评分升序' : '当前：风险评分降序'}
+                className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs bg-[#1F1F1F] border border-[#3a3a3a] text-slate-400 hover:text-slate-200 hover:border-[#555] transition-colors shrink-0">
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  {detailSortOrder === 'asc'
+                    ? <path strokeLinecap="round" strokeLinejoin="round" d="M3 4h13M3 8h9M3 12h5m8 0l4-4m0 0l4 4m-4-4v12" />
+                    : <path strokeLinecap="round" strokeLinejoin="round" d="M3 4h13M3 8h9M3 12h5m8 4l4 4m0 0l4-4m-4 4V8" />
+                  }
                 </svg>
+                排序
               </button>
-              <div className="flex-1 flex items-center gap-2 min-w-0">
-                <h2 className="text-base font-bold text-slate-100 truncate">{selectedEntry?.s.name}</h2>
-                {proteinType && (
-                  <span className={`text-xs px-2 py-0.5 rounded-full shrink-0 ${
-                    isAntibody ? 'bg-blue-500/20 text-blue-300'
-                    : proteinType === 'Peptide' ? 'bg-purple-500/20 text-purple-300'
-                    : 'bg-emerald-500/20 text-emerald-300'
-                  }`}>{proteinType}</span>
-                )}
-                {selectedEntry && recommendedIds.has(selectedEntry.s.id) && (
-                  <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 shrink-0">Recommended</span>
-                )}
+              {/* Prev / counter / Next */}
+              <div className="flex items-center gap-1 shrink-0">
+                <button type="button" disabled={curIdx <= 0}
+                  onClick={() => setSelectedId(detailList[curIdx - 1].s.id)}
+                  className="p-1 rounded text-slate-400 hover:text-slate-200 disabled:opacity-30 transition-colors">
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                  </svg>
+                </button>
+                <span className="text-xs text-neutral-500 px-1">{curIdx + 1} / {detailList.length}</span>
+                <button type="button" disabled={curIdx >= detailList.length - 1}
+                  onClick={() => setSelectedId(detailList[curIdx + 1].s.id)}
+                  className="p-1 rounded text-slate-400 hover:text-slate-200 disabled:opacity-30 transition-colors">
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                  </svg>
+                </button>
               </div>
-              <span className="text-xs text-neutral-500 shrink-0">{curIdx + 1} / {displayList.length}</span>
-              <button type="button" disabled={curIdx >= displayList.length - 1}
-                onClick={() => setSelectedId(displayList[curIdx + 1].s.id)}
-                className="p-1 rounded text-slate-400 hover:text-slate-200 disabled:opacity-30 transition-colors">
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                </svg>
-              </button>
             </div>
 
             {/* Main layout: left sequence+3D / right scan results */}
