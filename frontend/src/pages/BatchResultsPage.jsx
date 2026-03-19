@@ -31,21 +31,23 @@ function ScoreTooltip() {
       </svg>
       {/* Tooltip panel — appears below the icon */}
       <div className="absolute top-full left-0 mt-2 hidden group-hover:block z-[100] pointer-events-none"
-        style={{ width: 420 }}>
+        style={{ width: 'max-content' }}>
         {/* Arrow */}
         <div className="ml-1.5 w-2.5 h-2.5 bg-[#141414] border-l border-t border-[#555] rotate-45 -mb-1.5 ml-3" />
-        <div className="bg-[#141414] border border-[#555] rounded-xl px-3.5 py-3 shadow-2xl">
-          <p className="text-xs text-slate-300 mb-2.5 leading-relaxed">
-            得分越低，代表该序列越稳定
-          </p>
-          <div className="font-mono text-[11px] text-slate-400 whitespace-nowrap">
-            <span>Total_Score = </span>
-            <span>(N<sub className="text-red-500">Critical</sub><span> × </span><span className="text-red-500">10</span>)</span>
-            <span className="text-slate-600"> + </span>
-            <span>(N<sub className="text-red-400">High</sub><span> × </span><span className="text-red-400">5</span>)</span>
-            <span className="text-slate-600"> + </span>
-            <span>(N<sub className="text-orange-400">Medium</sub><span> × </span><span className="text-orange-400">2</span>)</span>
-          </div>
+        <div className="bg-[#141414] border border-[#555] rounded-xl px-3.5 py-2.5 shadow-2xl whitespace-nowrap">
+          <span className="text-xs text-slate-300">得分越低，代表该序列越稳定。</span>
+          <span className="font-mono text-[11px] text-slate-400">Total_Score = </span>
+          <span className="font-mono text-[11px]">
+            (N<sub className="text-red-500">Critical</sub><span className="text-slate-400"> × </span><span className="text-red-500">10</span>)
+          </span>
+          <span className="font-mono text-[11px] text-slate-600"> + </span>
+          <span className="font-mono text-[11px]">
+            (N<sub className="text-red-400">High</sub><span className="text-slate-400"> × </span><span className="text-red-400">5</span>)
+          </span>
+          <span className="font-mono text-[11px] text-slate-600"> + </span>
+          <span className="font-mono text-[11px]">
+            (N<sub className="text-orange-400">Medium</sub><span className="text-slate-400"> × </span><span className="text-orange-400">2</span>)
+          </span>
         </div>
       </div>
     </span>
