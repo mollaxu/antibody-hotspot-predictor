@@ -325,8 +325,8 @@ function HotspotList({ result }) {
 
 // ─── ComparisonTable ───────────────────────────────────────────────────────
 
-function ComparisonTable({ displayList, recommendedIds, customGroups = [] }) {
-  const allGroups = [...COLUMN_GROUPS, ...customGroups];
+function ComparisonTable({ displayList, recommendedIds, groups = COLUMN_GROUPS }) {
+  const allGroups = groups;
 
   // Build ruleName → count map per sequence
   const matrix = useMemo(() => {
@@ -374,9 +374,10 @@ function ComparisonTable({ displayList, recommendedIds, customGroups = [] }) {
             {allGroups.map(g =>
               g.motifs.map((m, mi) => (
                 <th key={m.ruleName}
-                  className={`px-3 py-1.5 text-center font-mono font-semibold border-b border-[#3a3a3a] whitespace-nowrap bg-[#1F1F1F] ${mi === g.motifs.length - 1 ? 'border-r' : ''} ${cellRiskColor[m.risk]}`}
+                  className={`px-3 py-1.5 text-center font-mono font-semibold border-b border-[#3a3a3a] whitespace-nowrap bg-[#1F1F1F] ${mi === g.motifs.length - 1 ? 'border-r' : ''} ${m.isCustom ? 'text-violet-400' : cellRiskColor[m.risk]}`}
                   style={{ minWidth: 52 }}>
                   <span translate="no">{m.key}</span>
+                  {m.isCustom && <span className="ml-0.5 text-[9px] text-violet-500">*</span>}
                 </th>
               ))
             )}
@@ -489,29 +490,54 @@ export default function BatchResultsPage() {
     );
   }, [scoredList]);
 
-  // Derive custom column groups from scan results (rules starting with "custom-")
-  const customColumnGroups = useMemo(() => {
-    const motifMap = new Map(); // ruleName → {key, ruleName, risk}
+  // Build the full column group list: predefined + custom motifs merged by group name
+  const allColumnGroups = useMemo(() => {
+    // Step 1: collect custom motifs, keyed by their group name
+    const customByGroup = new Map(); // group → Map(ruleName → motif def)
     for (const { r } of scoredList) {
       if (r?.status !== 'done' || !r.result?.hotspots) continue;
       for (const h of r.result.hotspots) {
-        if (!h.rule_name?.startsWith('custom-') || motifMap.has(h.rule_name)) continue;
+        if (!h.rule_name?.startsWith('custom-')) continue;
         const group = h.group || '自定义';
-        const prefix = `custom-${group}-`;
-        const key = h.rule_name.startsWith(prefix)
-          ? h.rule_name.slice(prefix.length)
-          : h.rule_name;
-        motifMap.set(h.rule_name, { key, ruleName: h.rule_name, risk: h.base_risk || 'Medium' });
+        if (!customByGroup.has(group)) customByGroup.set(group, new Map());
+        const motifMap = customByGroup.get(group);
+        if (!motifMap.has(h.rule_name)) {
+          const prefix = `custom-${group}-`;
+          const key = h.rule_name.startsWith(prefix)
+            ? h.rule_name.slice(prefix.length)
+            : h.rule_name;
+          motifMap.set(h.rule_name, {
+            key, ruleName: h.rule_name,
+            risk: h.base_risk || 'Medium',
+            isCustom: true,
+          });
+        }
       }
     }
-    if (motifMap.size === 0) return [];
-    return [{
-      group: '自定义',
-      groupEn: 'Custom',
-      labelClass: 'text-violet-300',
-      motifs: [...motifMap.values()],
-      isCustom: true,
-    }];
+    if (customByGroup.size === 0) return COLUMN_GROUPS;
+
+    const predefinedNames = new Set(COLUMN_GROUPS.map(g => g.group));
+
+    // Step 2: merge custom motifs into matching predefined groups
+    const result = COLUMN_GROUPS.map(g => {
+      const extra = customByGroup.get(g.group);
+      if (!extra || extra.size === 0) return g;
+      return { ...g, motifs: [...g.motifs, ...extra.values()] };
+    });
+
+    // Step 3: append entirely new custom groups
+    for (const [group, motifMap] of customByGroup) {
+      if (!predefinedNames.has(group)) {
+        result.push({
+          group,
+          groupEn: group,
+          labelClass: 'text-violet-300',
+          motifs: [...motifMap.values()],
+          isCustom: true,
+        });
+      }
+    }
+    return result;
   }, [scoredList]);
 
   // Apply Top N filter
@@ -583,7 +609,7 @@ export default function BatchResultsPage() {
 
       {/* ── Compare view ── */}
       {viewMode === 'compare' && (
-        <ComparisonTable displayList={displayList} recommendedIds={recommendedIds} customGroups={customColumnGroups} />
+        <ComparisonTable displayList={displayList} recommendedIds={recommendedIds} groups={allColumnGroups} />
       )}
 
       {/* ── Detail view ── */}
