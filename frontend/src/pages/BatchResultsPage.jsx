@@ -21,6 +21,51 @@ const riskColor = {
   Low:      'text-yellow-300',
 };
 
+// Tooltip icon next to the 得分 header
+function ScoreTooltip() {
+  return (
+    <span className="relative group inline-flex items-center cursor-help">
+      <svg className="w-3.5 h-3.5 text-slate-500 group-hover:text-slate-300 transition-colors"
+        viewBox="0 0 20 20" fill="currentColor">
+        <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+      </svg>
+      {/* Tooltip panel — appears below the icon */}
+      <div className="absolute top-full left-0 mt-2 hidden group-hover:block z-[100] pointer-events-none"
+        style={{ width: 296 }}>
+        {/* Arrow */}
+        <div className="ml-1.5 w-2.5 h-2.5 bg-[#141414] border-l border-t border-[#555] rotate-45 -mb-1.5 ml-3" />
+        <div className="bg-[#141414] border border-[#555] rounded-xl px-3.5 py-3 shadow-2xl">
+          <p className="text-xs text-slate-300 mb-2.5 leading-relaxed">
+            得分越低，代表该序列越稳定
+          </p>
+          <div className="font-mono text-[11px] leading-relaxed text-slate-400">
+            <div>Total_Score =</div>
+            <div className="pl-3 space-y-0.5 mt-1">
+              <div>
+                (N<sub className="text-red-500">Critical</sub>
+                <span> × </span>
+                <span className="text-red-500">10</span>)
+              </div>
+              <div className="text-slate-600">+</div>
+              <div>
+                (N<sub className="text-red-400">High</sub>
+                <span> × </span>
+                <span className="text-red-400">5</span>)
+              </div>
+              <div className="text-slate-600">+</div>
+              <div>
+                (N<sub className="text-orange-400">Medium</sub>
+                <span> × </span>
+                <span className="text-orange-400">2</span>)
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </span>
+  );
+}
+
 // Cell color for comparison table counts
 const cellRiskColor = {
   Critical: 'text-red-500 font-bold',
@@ -321,8 +366,11 @@ function ComparisonTable({ displayList, recommendedIds }) {
             </th>
             <th rowSpan={2}
               className="sticky z-20 bg-[#1F1F1F] px-3 py-3 text-center text-sm font-bold text-slate-200 border-b border-r border-[#3a3a3a] whitespace-nowrap"
-              style={{ left: 200, minWidth: 64, width: 64 }}>
-              得分
+              style={{ left: 200, minWidth: 72, width: 72 }}>
+              <div className="flex items-center justify-center gap-1">
+                得分
+                <ScoreTooltip />
+              </div>
             </th>
             {COLUMN_GROUPS.map(g => (
               <th key={g.group} colSpan={g.motifs.length}
