@@ -125,9 +125,12 @@ export default function SequenceStrip({ sequence, hotspots, selectedResidue, onS
           )}
         </div>
         <div className="flex gap-2 text-xs text-slate-400">
-          <span className="text-red-400">● 高风险</span>
-          <span className="text-orange-400">● 中风险</span>
-          <span className="text-yellow-300">● 低风险</span>
+          {Array.isArray(hotspots) && hotspots.some(h => (h.final_risk || h.base_risk) === 'Critical') && (
+            <span className="text-red-500">● Critical</span>
+          )}
+          <span className="text-red-400">● High</span>
+          <span className="text-orange-400">● Medium</span>
+          <span className="text-yellow-300">● Low</span>
         </div>
       </div>
       <div ref={containerRef} className="rounded-lg px-2 py-2 bg-[#181818] space-y-1.5 max-h-[190px] overflow-y-auto">

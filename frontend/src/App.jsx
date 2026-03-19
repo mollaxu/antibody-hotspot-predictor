@@ -34,6 +34,12 @@ function App() {
   const [filterRsaMin, setFilterRsaMin] = useState(0);
   const [filterRsaMax, setFilterRsaMax] = useState(100);
 
+  // 批量扫描
+  const [batchSequences, setBatchSequences] = useState([]);   // [{id, name, sequence}]
+  const [batchResults, setBatchResults] = useState([]);       // [{id, name, sequence, result, status, error}]
+  const [batchLoading, setBatchLoading] = useState(false);
+  const [batchProgress, setBatchProgress] = useState({ done: 0, total: 0 });
+
   // 自定义扫描规则
   const [defaultRules, setDefaultRules] = useState([]);       // 从后端拉取的默认规则
   const [customRules, setCustomRules] = useState({});          // 用户自定义覆盖
@@ -83,7 +89,7 @@ function App() {
 
   const proteinType = result?.protein_type || null;
   const isAntibody = proteinType === 'Antibody';
-  const isResultsPage = useLocation().pathname === '/results';
+  const isResultsPage = ['/results', '/batch-results'].includes(useLocation().pathname);
 
   const rsaFiltered = filterRsaMin > 0 || filterRsaMax < 100;
   const activeFilterCount = (filterRegion !== 'all' ? 1 : 0) + (filterGroup.length > 0 ? 1 : 0) + (filterRisk.length > 0 ? 1 : 0) + (filterChains.length > 0 ? 1 : 0) + (rsaFiltered ? 1 : 0);
@@ -170,6 +176,53 @@ function App() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const runBatchScan = async (sequences) => {
+    if (!sequences || sequences.length === 0) return;
+    setBatchLoading(true);
+    setBatchResults([]);
+    setBatchProgress({ done: 0, total: sequences.length });
+
+    const dr = Object.entries(customRules).filter(([, v]) => !v.enabled).map(([k]) => k);
+    const ro = {};
+    const drm = {};
+    defaultRules.forEach(r => { drm[r.rule_name] = r.risk; });
+    Object.entries(customRules).forEach(([k, v]) => {
+      if (v.enabled && v.risk !== drm[k]) ro[k] = v.risk;
+    });
+    const er = userRules.filter(r => r.enabled !== false && r.motif !== '(待添加)')
+      .map(r => ({ group: r.group, motif: r.motif, pattern: r.pattern, risk: r.risk }));
+
+    const accumulated = [];
+    for (let i = 0; i < sequences.length; i++) {
+      const s = sequences[i];
+      const seq = s.sequence.replace(/[^A-Za-z]/g, '').toUpperCase();
+      try {
+        const resp = await fetch(`${API_BASE}/scan`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sequence: seq,
+            pdb_text: null,
+            disabled_rules: dr.length > 0 ? dr : null,
+            risk_overrides: Object.keys(ro).length > 0 ? ro : null,
+            extra_rules: er.length > 0 ? er : null,
+          }),
+        });
+        if (resp.ok) {
+          const data = await resp.json();
+          accumulated.push({ ...s, result: data, status: 'done', error: null });
+        } else {
+          accumulated.push({ ...s, result: null, status: 'error', error: `HTTP ${resp.status}` });
+        }
+      } catch (e) {
+        accumulated.push({ ...s, result: null, status: 'error', error: e.message });
+      }
+      setBatchProgress({ done: i + 1, total: sequences.length });
+      setBatchResults([...accumulated]);
+    }
+    setBatchLoading(false);
   };
 
   const rescanWithPdb = async (seq, pdbContent) => {
@@ -357,6 +410,10 @@ function App() {
     filterChains, setFilterChains,
     filterRsaMin, setFilterRsaMin, filterRsaMax, setFilterRsaMax,
     defaultRules, customRules, setCustomRules, userRules, setUserRules,
+    batchSequences, setBatchSequences,
+    batchResults, setBatchResults,
+    batchLoading, batchProgress,
+    runBatchScan,
     cleanSequence, runScan, predictStructure,
     handleClear, handleExport, handleResidueSelectFromSequence,
   };

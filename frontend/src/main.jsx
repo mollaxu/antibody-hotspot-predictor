@@ -4,6 +4,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import App from './App.jsx';
 import InputPage from './pages/InputPage.jsx';
 import ResultsPage from './pages/ResultsPage.jsx';
+import BatchResultsPage from './pages/BatchResultsPage.jsx';
 import './index.css';
 
 ReactDOM.createRoot(document.getElementById('root')).render(
@@ -13,6 +14,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
         <Route element={<App />}>
           <Route index element={<InputPage />} />
           <Route path="results" element={<ResultsPage />} />
+          <Route path="batch-results" element={<BatchResultsPage />} />
         </Route>
       </Routes>
     </BrowserRouter>

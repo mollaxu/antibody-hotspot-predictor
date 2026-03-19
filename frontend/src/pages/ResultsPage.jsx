@@ -45,7 +45,7 @@ export default function ResultsPage() {
       <div className="flex flex-col md:flex-row gap-4 flex-1 min-h-0">
 
         {/* 左侧：序列视图 + 3D 结构 */}
-        <div className="hidden md:flex md:w-[55%] rounded-2xl bg-[#292929] px-4 py-4 flex-col gap-3 overflow-hidden">
+        <div className="hidden md:flex md:w-[55%] rounded-2xl bg-[#292929] px-4 py-5 flex-col gap-3 overflow-hidden">
           <SequenceStrip
             sequence={sequence}
             hotspots={result?.hotspots}
@@ -119,7 +119,7 @@ export default function ResultsPage() {
         )}
 
         {/* 右侧：扫描结果 */}
-        <div className="flex-1 flex flex-col rounded-2xl bg-[#292929] px-5 py-5 overflow-hidden">
+        <div className="flex-1 flex flex-col rounded-2xl bg-[#292929] px-5 py-4 overflow-hidden">
           <div className="shrink-0 flex items-center justify-between gap-3 pb-3">
             <div className="flex items-center gap-2">
               <h2 className="text-base font-bold text-slate-100">扫描结果</h2>
