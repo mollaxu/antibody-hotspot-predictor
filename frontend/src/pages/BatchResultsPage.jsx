@@ -329,6 +329,31 @@ function HotspotList({ result }) {
   );
 }
 
+// ─── Detail-view CSV export ─────────────────────────────────────────────────
+
+function exportDetailCsv(result, seqName) {
+  if (!result?.hotspots?.length) return;
+  const headers = ['RuleName', 'Motif', 'Regex', 'Start', 'End', 'Region', 'BaseRisk', 'FinalRisk', 'RSA'];
+  const sorted = [...result.hotspots].sort((a, b) => {
+    const ga = groupOrder.indexOf(a.group), gb = groupOrder.indexOf(b.group);
+    if (ga !== gb) return ga - gb;
+    return a.start - b.start;
+  });
+  const rows = sorted.map(h => [
+    `"${h.rule_name ?? ''}"`, `"${h.motif ?? ''}"`, `"${h.regex ?? ''}"`,
+    h.start, h.end, `"${h.region ?? ''}"`, `"${h.base_risk ?? ''}"`,
+    `"${h.final_risk ?? ''}"`, (h.rsa ?? 0).toFixed(3),
+  ]);
+  const csv = headers.join(',') + '\n' + rows.map(r => r.join(',')).join('\n');
+  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `hotspot_${seqName ?? 'detail'}_${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 // ─── CSV export ────────────────────────────────────────────────────────────
 
 function exportComparison(displayList, groups, matrix) {
@@ -552,6 +577,14 @@ export default function BatchResultsPage() {
   const [detailSortOrder, setDetailSortOrder]             = useState('asc'); // 'asc' | 'desc'
   const [batchFolding, setBatchFolding]                   = useState({}); // seqId → {status,pdbUrl,pdbText,error}
   const [detailSelectedResidue, setDetailSelectedResidue] = useState(null);
+
+  // Detail-view filter state
+  const [detailFilterOpen, setDetailFilterOpen]     = useState(false);
+  const [detailFilterGroup, setDetailFilterGroup]   = useState([]);
+  const [detailFilterRisk, setDetailFilterRisk]     = useState([]);
+  const [detailFilterRegion, setDetailFilterRegion] = useState('all');
+  const [detailFilterRsaMin, setDetailFilterRsaMin] = useState(0);
+  const [detailFilterRsaMax, setDetailFilterRsaMax] = useState(100);
   const startedFoldRef = useRef(new Set());
 
   // Trigger ESMFold for one sequence in batch detail view
@@ -579,6 +612,16 @@ export default function BatchResultsPage() {
       setBatchFolding(prev => ({ ...prev, [seqId]: { status: 'error', pdbUrl: '', pdbText: '', error: e.message } }));
     }
   }, []);
+
+  // Reset detail filters when selected sequence changes
+  useEffect(() => {
+    setDetailFilterOpen(false);
+    setDetailFilterGroup([]);
+    setDetailFilterRisk([]);
+    setDetailFilterRegion('all');
+    setDetailFilterRsaMin(0);
+    setDetailFilterRsaMax(100);
+  }, [selectedId]);
 
   // Attach scores, sort ascending (pending last) — must be before the useEffect that depends on it
   const scoredList = useMemo(() => {
@@ -926,20 +969,250 @@ export default function BatchResultsPage() {
               </div>
 
               {/* Right: scan results */}
-              <div className="flex-1 rounded-2xl bg-[#292929] px-5 py-4 flex flex-col overflow-hidden min-w-0">
-                <div className="shrink-0 pb-3 border-b border-[#333]">
-                  <p className="text-sm text-slate-400">
-                    序列长度：{selectedResult?.result?.sequence_length ?? '—'}，命中位点：{selectedResult?.result?.hotspots?.length ?? 0} 个
-                  </p>
-                </div>
-                {selectedResult?.status === 'error' ? (
-                  <div className="flex-1 flex items-center justify-center text-sm text-red-400">
-                    扫描失败：{selectedResult.error}
+              {(() => {
+                const hotspots = selectedResult?.result?.hotspots ?? [];
+                const detailActiveFilterCount =
+                  (detailFilterGroup.length > 0 ? 1 : 0) +
+                  (detailFilterRisk.length > 0 ? 1 : 0) +
+                  (detailFilterRegion !== 'all' ? 1 : 0) +
+                  (detailFilterRsaMin > 0 || detailFilterRsaMax < 100 ? 1 : 0);
+                const allGroups = [
+                  ...groupOrder,
+                  ...hotspots.map(h => h.group).filter(g => !groupOrder.includes(g)).filter((g, i, a) => a.indexOf(g) === i),
+                ];
+                return (
+                  <div className="flex-1 rounded-2xl bg-[#292929] px-5 py-4 flex flex-col overflow-hidden min-w-0">
+                    {/* Header */}
+                    <div className="shrink-0 flex items-center justify-between gap-3 pb-3">
+                      <p className="text-sm text-slate-400">
+                        序列长度：{selectedResult?.result?.sequence_length ?? '—'}，命中位点：{hotspots.length} 个
+                      </p>
+                      {hotspots.length > 0 && (
+                        <div className="flex items-center gap-2 relative">
+                          {/* 筛选按钮 */}
+                          <button type="button" onClick={() => setDetailFilterOpen(v => !v)}
+                            className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                              detailActiveFilterCount > 0
+                                ? 'bg-[#5D56C1]/20 text-[#a5a0f3] ring-1 ring-[#5D56C1]/40'
+                                : 'bg-[#1F1F1F] text-slate-400 hover:text-slate-200'
+                            }`}>
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                            </svg>
+                            筛选{detailActiveFilterCount > 0 ? ` (${detailActiveFilterCount})` : ''}
+                          </button>
+                          {/* 导出按钮 */}
+                          <button type="button"
+                            onClick={() => exportDetailCsv(selectedResult?.result, selectedEntry?.s.name)}
+                            className="inline-flex items-center justify-center rounded-lg bg-[#5D56C1] hover:bg-[#6d66d4] active:bg-[#4a44a8] px-4 py-2 text-sm font-medium text-slate-50 transition-colors">
+                            导出 Excel
+                          </button>
+                          {/* 筛选弹窗 */}
+                          {detailFilterOpen && (
+                            <>
+                              <div className="fixed inset-0 z-40" onClick={() => setDetailFilterOpen(false)} />
+                              <div className="absolute right-0 top-full mt-2 z-50 w-96 rounded-xl bg-[#1F1F1F] p-5 space-y-5 shadow-xl shadow-black/40 max-h-[80vh] overflow-y-auto">
+                                {/* 类别 */}
+                                <div className="space-y-2">
+                                  <span className="text-xs font-medium text-neutral-400">
+                                    类别{detailFilterGroup.length > 0 && <span className="text-[#8b85e0] ml-1">({detailFilterGroup.length})</span>}
+                                  </span>
+                                  <div className="flex flex-wrap gap-1.5">
+                                    {allGroups.map(g => {
+                                      const active = detailFilterGroup.includes(g);
+                                      return (
+                                        <button key={g} type="button"
+                                          onClick={() => setDetailFilterGroup(prev => active ? prev.filter(x => x !== g) : [...prev, g])}
+                                          className={`px-2 py-1 rounded-md text-xs transition-colors ${active ? 'bg-[#5D56C1] text-slate-50' : 'bg-[#292929] text-slate-400 hover:text-slate-200'}`}>
+                                          {g}
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                                {/* 风险等级 */}
+                                <div className="space-y-2">
+                                  <span className="text-xs font-medium text-neutral-400">
+                                    风险等级{detailFilterRisk.length > 0 && <span className="text-[#8b85e0] ml-1">({detailFilterRisk.length})</span>}
+                                  </span>
+                                  <div className="flex gap-1.5">
+                                    {[
+                                      { value: 'Critical', color: 'bg-red-500/20 text-red-500 border-red-500/30' },
+                                      { value: 'High',     color: 'bg-red-500/20 text-red-400 border-red-500/30' },
+                                      { value: 'Medium',   color: 'bg-orange-500/20 text-orange-400 border-orange-500/30' },
+                                      { value: 'Low',      color: 'bg-yellow-500/20 text-yellow-300 border-yellow-500/30' },
+                                    ].map(({ value, color }) => {
+                                      const active = detailFilterRisk.includes(value);
+                                      return (
+                                        <button key={value} type="button"
+                                          onClick={() => setDetailFilterRisk(prev => active ? prev.filter(x => x !== value) : [...prev, value])}
+                                          className={`px-2.5 py-1 rounded-md text-xs border transition-colors ${active ? 'bg-[#5D56C1] text-slate-50 border-[#5D56C1]' : `${color} border`}`}>
+                                          {value}
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                                {/* 区域（仅抗体） */}
+                                {isAntibody && (
+                                  <div className="space-y-2">
+                                    <span className="text-xs font-medium text-neutral-400">区域</span>
+                                    <div className="flex items-center rounded-lg bg-[#292929] p-0.5 text-xs">
+                                      {[
+                                        { value: 'all', label: '全部' },
+                                        { value: 'cdr', label: 'CDR' },
+                                        { value: 'fr',  label: 'FR' },
+                                        { value: 'fc',  label: 'Fc' },
+                                      ].map(({ value, label }) => (
+                                        <button key={value} type="button" onClick={() => setDetailFilterRegion(value)}
+                                          className={`flex-1 py-1.5 rounded-md text-center transition-colors ${detailFilterRegion === value ? 'bg-[#5D56C1] text-slate-50' : 'text-slate-400 hover:text-slate-200'}`}>
+                                          {label}
+                                        </button>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                                {/* RSA */}
+                                <div className="space-y-2.5">
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-xs font-medium text-neutral-400">RSA</span>
+                                    <span className="text-xs text-slate-300 font-mono">{detailFilterRsaMin}% – {detailFilterRsaMax}%</span>
+                                  </div>
+                                  <div className="relative h-7">
+                                    <div className="absolute top-2 left-0 right-0 h-2 rounded-full bg-[#292929] overflow-hidden">
+                                      <div className="absolute h-full bg-red-500/60"     style={{ left: '0%',  width: '5%'  }} />
+                                      <div className="absolute h-full bg-orange-500/50"  style={{ left: '5%',  width: '15%' }} />
+                                      <div className="absolute h-full bg-emerald-500/50" style={{ left: '20%', width: '80%' }} />
+                                    </div>
+                                    <div className="absolute top-2 h-2 rounded-full bg-[#5D56C1]/60"
+                                      style={{ left: `${detailFilterRsaMin}%`, width: `${detailFilterRsaMax - detailFilterRsaMin}%` }} />
+                                    <input type="range" min={0} max={100} step={1} value={detailFilterRsaMin}
+                                      onChange={e => { const v = Number(e.target.value); if (v <= detailFilterRsaMax) setDetailFilterRsaMin(v); }}
+                                      className="absolute top-0 left-0 w-full h-7 appearance-none bg-transparent pointer-events-none [&::-webkit-slider-thumb]:pointer-events-auto [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3.5 [&::-webkit-slider-thumb]:h-3.5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-[#5D56C1] [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-[#1F1F1F] [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:relative [&::-webkit-slider-thumb]:z-20" />
+                                    <input type="range" min={0} max={100} step={1} value={detailFilterRsaMax}
+                                      onChange={e => { const v = Number(e.target.value); if (v >= detailFilterRsaMin) setDetailFilterRsaMax(v); }}
+                                      className="absolute top-0 left-0 w-full h-7 appearance-none bg-transparent pointer-events-none [&::-webkit-slider-thumb]:pointer-events-auto [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3.5 [&::-webkit-slider-thumb]:h-3.5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-[#5D56C1] [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-[#1F1F1F] [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:relative [&::-webkit-slider-thumb]:z-20" />
+                                  </div>
+                                  <div className="flex gap-1.5">
+                                    {[
+                                      { label: '深埋 <5%',    min: 0,  max: 5   },
+                                      { label: '部分 5-20%', min: 5,  max: 20  },
+                                      { label: '暴露 >20%',  min: 20, max: 100 },
+                                      { label: '全部',        min: 0,  max: 100 },
+                                    ].map(p => (
+                                      <button key={p.label} type="button"
+                                        onClick={() => { setDetailFilterRsaMin(p.min); setDetailFilterRsaMax(p.max); }}
+                                        className={`flex-1 px-1 py-1 rounded-md text-[11px] transition-colors ${
+                                          detailFilterRsaMin === p.min && detailFilterRsaMax === p.max
+                                            ? 'bg-[#5D56C1] text-slate-50'
+                                            : 'bg-[#292929] text-slate-400 hover:text-slate-200'
+                                        }`}>
+                                        {p.label}
+                                      </button>
+                                    ))}
+                                  </div>
+                                </div>
+                                {/* 操作 */}
+                                <div className="flex items-center gap-2 pt-1">
+                                  <button type="button" onClick={() => setDetailFilterOpen(false)}
+                                    className="flex-1 px-3 py-2 rounded-lg bg-[#5D56C1] text-xs text-slate-50 hover:bg-[#6d66d4] transition-colors">
+                                    确定
+                                  </button>
+                                  <button type="button"
+                                    onClick={() => { setDetailFilterRegion('all'); setDetailFilterGroup([]); setDetailFilterRisk([]); setDetailFilterRsaMin(0); setDetailFilterRsaMax(100); }}
+                                    className="flex-1 px-3 py-2 rounded-lg text-xs text-slate-400 hover:text-slate-200 bg-[#292929] transition-colors">
+                                    清空筛选
+                                  </button>
+                                </div>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Hotspot list */}
+                    {selectedResult?.status === 'error' ? (
+                      <div className="flex-1 flex items-center justify-center text-sm text-red-400">
+                        扫描失败：{selectedResult.error}
+                      </div>
+                    ) : (
+                      <div className="flex-1 overflow-y-auto">
+                        <div className="rounded-xl bg-[#1F1F1F]">
+                          {hotspots.length > 0 ? (
+                            <div className="text-sm">
+                              {allGroups
+                                .filter(g => detailFilterGroup.length === 0 || detailFilterGroup.includes(g))
+                                .map(groupLabel => {
+                                  const items = hotspots
+                                    .filter(h => h.group === groupLabel)
+                                    .filter(h => {
+                                      if (detailFilterRegion === 'all') return true;
+                                      if (detailFilterRegion === 'cdr') return h.region?.startsWith('CDR');
+                                      if (detailFilterRegion === 'fr')  return h.region?.startsWith('FR');
+                                      if (detailFilterRegion === 'fc')  return h.region === 'Fc';
+                                      return true;
+                                    })
+                                    .filter(h => detailFilterRisk.length === 0 || detailFilterRisk.includes(h.final_risk))
+                                    .filter(h => {
+                                      if (detailFilterRsaMin === 0 && detailFilterRsaMax === 100) return true;
+                                      if (h.rsa == null || h.rsa < 0) return detailFilterRsaMin === 0;
+                                      const pct = h.rsa * 100;
+                                      return pct >= detailFilterRsaMin && pct <= detailFilterRsaMax;
+                                    })
+                                    .sort((a, b) => {
+                                      const ra = riskRank[a.final_risk] ?? 99, rb = riskRank[b.final_risk] ?? 99;
+                                      return ra !== rb ? ra - rb : a.start - b.start;
+                                    });
+                                  if (!items.length) return null;
+                                  return (
+                                    <div key={groupLabel} className="px-4 py-3 space-y-2">
+                                      <div className="flex items-center justify-between">
+                                        <h3 className="text-base font-bold tracking-wide text-slate-300 uppercase">
+                                          {groupLabel.replace(/^\d+\.\s*/, '')}
+                                        </h3>
+                                        <span className="text-sm text-neutral-500">共 {items.length} 个风险位点</span>
+                                      </div>
+                                      <ul className="space-y-2">
+                                        {items.map((h, idx) => (
+                                          <li key={idx} className="rounded-lg px-3 py-2.5 bg-[#292929]">
+                                            <div className="flex items-center justify-between gap-2">
+                                              <div className="font-semibold text-slate-50 text-sm">
+                                                基序：<span translate="no">{h.motif}</span>
+                                              </div>
+                                              <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs ${riskBadge[h.final_risk] || 'bg-slate-500/20 text-slate-400'}`}>
+                                                {h.final_risk}
+                                              </span>
+                                            </div>
+                                            <div className="mt-1 text-sm text-slate-400 space-x-2">
+                                              <span className="text-slate-100">
+                                                位点区间：{h.end - h.start === 1 ? h.start + 1 : `${h.start + 1} - ${h.end}`}
+                                              </span>
+                                            </div>
+                                            <div className="mt-1 text-sm text-slate-400 space-x-2">
+                                              {h.region && h.region !== 'N/A' && (
+                                                <span className={h.region.startsWith('CDR') ? 'text-red-300' : 'text-slate-400'}>
+                                                  区域：{h.region}
+                                                </span>
+                                              )}
+                                              <span>{h.region && h.region !== 'N/A' ? '| ' : ''}RSA：{h.rsa >= 0 ? `${(h.rsa * 100).toFixed(1)}%` : 'N/A'}</span>
+                                            </div>
+                                          </li>
+                                        ))}
+                                      </ul>
+                                    </div>
+                                  );
+                                })}
+                            </div>
+                          ) : (
+                            <div className="px-4 py-6 text-sm text-slate-400">未检测到任何符合规则的 Hotspot 基序。</div>
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </div>
-                ) : (
-                  <HotspotList result={selectedResult?.result ?? null} />
-                )}
-              </div>
+                );
+              })()}
 
             </div>
           </div>
