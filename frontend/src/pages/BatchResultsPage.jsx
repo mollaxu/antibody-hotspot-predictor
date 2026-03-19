@@ -362,7 +362,7 @@ function ComparisonTable({ displayList, recommendedIds }) {
             </th>
             {COLUMN_GROUPS.map(g => (
               <th key={g.group} colSpan={g.motifs.length}
-                className={`px-2 py-2 text-center font-bold border-b border-r border-[#3a3a3a] whitespace-nowrap ${g.thClass} ${g.labelClass}`}>
+                className={`px-2 py-2 text-center font-bold border-b border-r border-[#3a3a3a] whitespace-nowrap bg-[#1F1F1F] ${g.labelClass}`}>
                 {g.groupEn}({g.group})
               </th>
             ))}
@@ -372,7 +372,7 @@ function ComparisonTable({ displayList, recommendedIds }) {
             {COLUMN_GROUPS.map(g =>
               g.motifs.map((m, mi) => (
                 <th key={m.ruleName}
-                  className={`px-3 py-1.5 text-center font-mono font-semibold border-b border-[#3a3a3a] whitespace-nowrap ${mi === g.motifs.length - 1 ? 'border-r' : ''} ${g.thClass} ${cellRiskColor[m.risk]}`}
+                  className={`px-3 py-1.5 text-center font-mono font-semibold border-b border-[#3a3a3a] whitespace-nowrap bg-[#1F1F1F] ${mi === g.motifs.length - 1 ? 'border-r' : ''} ${cellRiskColor[m.risk]}`}
                   style={{ minWidth: 52 }}>
                   <span translate="no">{m.key}</span>
                 </th>
@@ -389,7 +389,7 @@ function ComparisonTable({ displayList, recommendedIds }) {
             const isPending = r?.status !== 'done' && r?.status !== 'error';
             const isError = r?.status === 'error';
             const rowBg = isRecommended ? 'bg-emerald-900/15' : '';
-            const stickyBg = isRecommended ? 'bg-emerald-900/25' : 'bg-[#292929]';
+            const stickyBg = isRecommended ? 'bg-[#162b1e]' : 'bg-[#292929]';
 
             return (
               <tr key={s.id} className={`${rowBg} hover:brightness-110 transition-all`}>
