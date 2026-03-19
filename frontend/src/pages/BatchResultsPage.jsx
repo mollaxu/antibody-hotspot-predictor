@@ -323,6 +323,44 @@ function HotspotList({ result }) {
   );
 }
 
+// ─── CSV export ────────────────────────────────────────────────────────────
+
+function exportComparison(displayList, groups, matrix) {
+  const esc = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
+
+  // Header row 1: group spans (blank for name/seq/score columns)
+  const h1 = ['', '', ''];
+  for (const g of groups) {
+    h1.push(g.isCustom ? `${g.group}（自定义）` : `${g.groupEn}(${g.group})`);
+    for (let i = 1; i < g.motifs.length; i++) h1.push('');
+  }
+
+  // Header row 2: column labels
+  const h2 = ['序列名称', '氨基酸序列', '风险评分'];
+  for (const g of groups) {
+    for (const m of g.motifs) h2.push(m.key + (m.isCustom ? '*' : ''));
+  }
+
+  const rows = [h1, h2];
+  for (const { s, r, score } of displayList) {
+    const counts = matrix[s.id] || {};
+    const row = [s.name, s.sequence, score ?? ''];
+    for (const g of groups) {
+      for (const m of g.motifs) row.push(counts[m.ruleName] || 0);
+    }
+    rows.push(row);
+  }
+
+  const csv = '\ufeff' + rows.map(r => r.map(esc).join(',')).join('\r\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `hotspot_comparison_${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 // ─── ComparisonTable ───────────────────────────────────────────────────────
 
 function ComparisonTable({ displayList, recommendedIds, groups = COLUMN_GROUPS }) {
@@ -344,7 +382,18 @@ function ComparisonTable({ displayList, recommendedIds, groups = COLUMN_GROUPS }
   }, [displayList]);
 
   return (
-    <div className="flex-1 overflow-auto rounded-2xl bg-[#292929]">
+    <div className="flex-1 flex flex-col min-h-0 gap-2">
+      {/* Export button */}
+      <div className="shrink-0 flex justify-end">
+        <button type="button" onClick={() => exportComparison(displayList, allGroups, matrix)}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm bg-[#292929] hover:bg-[#3a3a3a] text-slate-300 hover:text-slate-100 border border-[#444] transition-colors">
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+          </svg>
+          导出 CSV
+        </button>
+      </div>
+      <div className="flex-1 overflow-auto rounded-2xl bg-[#292929]">
       <table className="text-xs border-collapse" style={{ minWidth: '100%' }}>
         <thead className="sticky top-0 z-10">
           {/* Row 1: group headers */}
@@ -439,6 +488,7 @@ function ComparisonTable({ displayList, recommendedIds, groups = COLUMN_GROUPS }
           })}
         </tbody>
       </table>
+      </div>
     </div>
   );
 }
@@ -581,29 +631,26 @@ export default function BatchResultsPage() {
       )}
 
       {/* View toggle + Top N */}
-      <div className="shrink-0 flex items-center justify-between">
-        {/* View mode tabs */}
-        <div className="flex items-center rounded-lg bg-[#1F1F1F] p-0.5 text-xs">
+      <div className="shrink-0 flex items-center justify-center gap-6">
+        {/* View mode tabs — centered, text-base */}
+        <div className="flex items-center rounded-lg bg-[#1F1F1F] p-0.5 text-base">
           <button type="button" onClick={() => setViewMode('compare')}
-            className={`px-3 py-1.5 rounded-md transition-colors ${viewMode === 'compare' ? 'bg-[#5D56C1] text-slate-50' : 'text-slate-400 hover:text-slate-200'}`}>
+            className={`px-4 py-1.5 rounded-md transition-colors ${viewMode === 'compare' ? 'bg-[#5D56C1] text-slate-50' : 'text-slate-400 hover:text-slate-200'}`}>
             分布对比
           </button>
           <button type="button" onClick={() => setViewMode('detail')}
-            className={`px-3 py-1.5 rounded-md transition-colors ${viewMode === 'detail' ? 'bg-[#5D56C1] text-slate-50' : 'text-slate-400 hover:text-slate-200'}`}>
+            className={`px-4 py-1.5 rounded-md transition-colors ${viewMode === 'detail' ? 'bg-[#5D56C1] text-slate-50' : 'text-slate-400 hover:text-slate-200'}`}>
             详情视图
           </button>
         </div>
         {/* Top N toggle */}
-        <div className="flex items-center gap-3">
-          <span className="text-xs text-neutral-500">得分越低，代表该序列越稳定</span>
-          <div className="flex items-center rounded-lg bg-[#1F1F1F] p-0.5 text-xs">
-            {TOP_OPTIONS.map(opt => (
-              <button key={opt.value} type="button" onClick={() => setTopN(opt.value)}
-                className={`px-2.5 py-1 rounded-md transition-colors ${topN === opt.value ? 'bg-[#5D56C1] text-slate-50' : 'text-slate-400 hover:text-slate-200'}`}>
-                {opt.label}
-              </button>
-            ))}
-          </div>
+        <div className="flex items-center rounded-lg bg-[#1F1F1F] p-0.5 text-xs">
+          {TOP_OPTIONS.map(opt => (
+            <button key={opt.value} type="button" onClick={() => setTopN(opt.value)}
+              className={`px-2.5 py-1 rounded-md transition-colors ${topN === opt.value ? 'bg-[#5D56C1] text-slate-50' : 'text-slate-400 hover:text-slate-200'}`}>
+              {opt.label}
+            </button>
+          ))}
         </div>
       </div>
 
