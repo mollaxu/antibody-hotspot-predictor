@@ -386,7 +386,7 @@ function ComparisonTable({ displayList, recommendedIds, groups = COLUMN_GROUPS }
       {/* Export button */}
       <div className="shrink-0 flex justify-end">
         <button type="button" onClick={() => exportComparison(displayList, allGroups, matrix)}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm bg-[#292929] hover:bg-[#3a3a3a] text-slate-300 hover:text-slate-100 border border-[#444] transition-colors">
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm bg-[#5D56C1] hover:bg-[#6e67d4] text-slate-50 transition-colors">
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
           </svg>
@@ -509,8 +509,12 @@ export default function BatchResultsPage() {
   const { batchSequences, batchResults, batchLoading, batchProgress } = ctx;
 
   const [selectedId, setSelectedId] = useState(batchSequences?.[0]?.id ?? null);
-  const [topN, setTopN] = useState(0);
   const [viewMode, setViewMode] = useState('compare'); // 'compare' | 'detail'
+  // Filter state
+  const [filterTopN, setFilterTopN]         = useState(0);
+  const [filterScoreMin, setFilterScoreMin] = useState('');
+  const [filterScoreMax, setFilterScoreMax] = useState('');
+  const [hiddenGroups, setHiddenGroups]     = useState(new Set());
 
   if (!batchSequences || batchSequences.length === 0) return <Navigate to="/" replace />;
 
@@ -590,11 +594,22 @@ export default function BatchResultsPage() {
     return result;
   }, [scoredList]);
 
-  // Apply Top N filter
+  // Apply filters: Top N + score range
   const displayList = useMemo(() => {
-    if (topN === 0) return scoredList;
-    return scoredList.filter(({ score }) => score !== null).slice(0, topN);
-  }, [scoredList, topN]);
+    let list = filterTopN === 0
+      ? scoredList
+      : scoredList.filter(({ score }) => score !== null).slice(0, filterTopN);
+    const min = filterScoreMin !== '' ? Number(filterScoreMin) : null;
+    const max = filterScoreMax !== '' ? Number(filterScoreMax) : null;
+    if (min !== null) list = list.filter(({ score }) => score === null || score >= min);
+    if (max !== null) list = list.filter(({ score }) => score === null || score <= max);
+    return list;
+  }, [scoredList, filterTopN, filterScoreMin, filterScoreMax]);
+
+  // Visible column groups (hide toggled-off groups)
+  const visibleColumnGroups = useMemo(() =>
+    hiddenGroups.size === 0 ? allColumnGroups : allColumnGroups.filter(g => !hiddenGroups.has(g.group)),
+  [allColumnGroups, hiddenGroups]);
 
   // Keep selected item valid across list reorders
   const displayIds = new Set(displayList.map(({ s }) => s.id));
@@ -630,9 +645,8 @@ export default function BatchResultsPage() {
         </div>
       )}
 
-      {/* View toggle + Top N */}
-      <div className="shrink-0 flex items-center justify-center gap-6">
-        {/* View mode tabs — centered, text-base */}
+      {/* View toggle — centered, text-base */}
+      <div className="shrink-0 flex justify-center">
         <div className="flex items-center rounded-lg bg-[#1F1F1F] p-0.5 text-base">
           <button type="button" onClick={() => setViewMode('compare')}
             className={`px-4 py-1.5 rounded-md transition-colors ${viewMode === 'compare' ? 'bg-[#5D56C1] text-slate-50' : 'text-slate-400 hover:text-slate-200'}`}>
@@ -643,20 +657,70 @@ export default function BatchResultsPage() {
             详情视图
           </button>
         </div>
-        {/* Top N toggle */}
-        <div className="flex items-center rounded-lg bg-[#1F1F1F] p-0.5 text-xs">
-          {TOP_OPTIONS.map(opt => (
-            <button key={opt.value} type="button" onClick={() => setTopN(opt.value)}
-              className={`px-2.5 py-1 rounded-md transition-colors ${topN === opt.value ? 'bg-[#5D56C1] text-slate-50' : 'text-slate-400 hover:text-slate-200'}`}>
-              {opt.label}
-            </button>
-          ))}
-        </div>
       </div>
+
+      {/* ── Filter bar (compare mode only) ── */}
+      {viewMode === 'compare' && (
+        <div className="shrink-0 flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2.5 rounded-xl bg-[#292929]">
+
+          {/* 序列 */}
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-neutral-500 whitespace-nowrap">序列</span>
+            <div className="flex items-center rounded-lg bg-[#1F1F1F] p-0.5 text-xs">
+              {TOP_OPTIONS.map(opt => (
+                <button key={opt.value} type="button" onClick={() => setFilterTopN(opt.value)}
+                  className={`px-2.5 py-1 rounded-md transition-colors ${filterTopN === opt.value ? 'bg-[#5D56C1] text-slate-50' : 'text-slate-400 hover:text-slate-200'}`}>
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="h-4 w-px bg-[#3a3a3a] shrink-0" />
+
+          {/* 风险评分 */}
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-neutral-500 whitespace-nowrap">风险评分</span>
+            <input type="number" min="0" placeholder="最低"
+              value={filterScoreMin} onChange={e => setFilterScoreMin(e.target.value)}
+              className="w-16 px-2 py-1 rounded-md bg-[#1F1F1F] border border-[#444] text-xs text-slate-200 placeholder-neutral-600 focus:outline-none focus:border-[#5D56C1]" />
+            <span className="text-neutral-600 text-xs">—</span>
+            <input type="number" min="0" placeholder="最高"
+              value={filterScoreMax} onChange={e => setFilterScoreMax(e.target.value)}
+              className="w-16 px-2 py-1 rounded-md bg-[#1F1F1F] border border-[#444] text-xs text-slate-200 placeholder-neutral-600 focus:outline-none focus:border-[#5D56C1]" />
+          </div>
+
+          <div className="h-4 w-px bg-[#3a3a3a] shrink-0" />
+
+          {/* 表头 */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-xs text-neutral-500 whitespace-nowrap">表头</span>
+            {allColumnGroups.map(g => {
+              const visible = !hiddenGroups.has(g.group);
+              return (
+                <button key={g.group} type="button"
+                  onClick={() => setHiddenGroups(prev => {
+                    const next = new Set(prev);
+                    visible ? next.add(g.group) : next.delete(g.group);
+                    return next;
+                  })}
+                  className={`px-2 py-0.5 rounded text-xs border transition-colors ${
+                    visible
+                      ? `${g.labelClass} border-current`
+                      : 'text-neutral-600 border-[#3a3a3a]'
+                  }`}>
+                  {g.group}
+                </button>
+              );
+            })}
+          </div>
+
+        </div>
+      )}
 
       {/* ── Compare view ── */}
       {viewMode === 'compare' && (
-        <ComparisonTable displayList={displayList} recommendedIds={recommendedIds} groups={allColumnGroups} />
+        <ComparisonTable displayList={displayList} recommendedIds={recommendedIds} groups={visibleColumnGroups} />
       )}
 
       {/* ── Detail view ── */}
