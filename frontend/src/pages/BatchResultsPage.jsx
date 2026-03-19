@@ -878,19 +878,17 @@ export default function BatchResultsPage() {
                 <div className="flex-1 rounded-xl overflow-hidden relative bg-[#1a1a1a]">
                   {fold.status === 'idle' && (
                     <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3">
-                      <p className="text-sm text-slate-400">
-                        {isTop10 ? '结构预测准备中…' : '该序列不在 Top 10 范围内'}
-                      </p>
-                      {!isTop10 && (
-                        <button type="button"
-                          onClick={() => {
-                            startedFoldRef.current.add(effectiveSelectedId);
-                            predictBatchStructure(effectiveSelectedId, selectedEntry?.s.sequence ?? '');
-                          }}
-                          className="px-4 py-2 rounded-lg bg-[#5D56C1] hover:bg-[#6e67d4] text-sm text-slate-50 transition-colors">
-                          开始结构预测
-                        </button>
-                      )}
+                      {isTop10
+                        ? <p className="text-sm text-slate-400">结构预测准备中…</p>
+                        : <button type="button"
+                            onClick={() => {
+                              startedFoldRef.current.add(effectiveSelectedId);
+                              predictBatchStructure(effectiveSelectedId, selectedEntry?.s.sequence ?? '');
+                            }}
+                            className="px-4 py-2 rounded-lg bg-[#5D56C1] hover:bg-[#6e67d4] text-sm text-slate-50 transition-colors">
+                            开始结构预测
+                          </button>
+                      }
                     </div>
                   )}
                   {fold.status === 'loading' && (
