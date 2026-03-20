@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useOutletContext, Navigate, useNavigate } from 'react-router-dom';
 import SequenceStrip from '../components/SequenceStrip.jsx';
 import ProteinViewer from '../ProteinViewer.jsx';
+import RulesModal from '../components/RulesModal.jsx';
 
 const API_BASE =
   import.meta?.env?.VITE_API_BASE_URL ||
@@ -234,12 +235,21 @@ const COLUMN_GROUPS = [
   },
 ];
 
-/** 风险评分：Total_Score = N_Critical×10 + N_High×5 + N_Medium×2 + N_Low×1 */
-function calcScore(result) {
+/** 风险评分：Total_Score = N_Critical×10 + N_High×5 + N_Medium×2 + N_Low×1
+ *  可传入 customRules / userRules 实时反映规则变更（启用/禁用、风险等级覆盖）
+ */
+function calcScore(result, customRules = {}, userRules = []) {
   if (!result?.hotspots) return null;
+  const disabledUserRuleNames = new Set(
+    userRules.filter(r => r.enabled === false).map(r => `custom-${r.group}-${r.motif}`)
+  );
   let score = 0;
   for (const h of result.hotspots) {
-    const r = h.final_risk || h.base_risk;
+    const ruleCfg = customRules[h.rule_name];
+    if (ruleCfg?.enabled === false) continue;                  // 默认规则被禁用
+    if (disabledUserRuleNames.has(h.rule_name)) continue;      // 用户规则被禁用
+    // 使用覆盖后的风险等级，否则回退到后端返回值
+    const r = ruleCfg?.risk || h.final_risk || h.base_risk;
     if (r === 'Critical')    score += 10;
     else if (r === 'High')   score += 5;
     else if (r === 'Medium') score += 2;
@@ -399,7 +409,7 @@ function exportComparison(displayList, groups, matrix) {
 
 // ─── ComparisonTable ───────────────────────────────────────────────────────
 
-function ComparisonTable({ displayList, recommendedIds, groups = COLUMN_GROUPS, filterOpen, setFilterOpen, activeFilterCount = 0, filterBar, onClearFilters, onRowClick }) {
+function ComparisonTable({ displayList, recommendedIds, groups = COLUMN_GROUPS, filterOpen, setFilterOpen, activeFilterCount = 0, filterBar, onClearFilters, onRowClick, onRulesOpen, onToggleRule, showCdrColumn = false, defaultRules, customRules = {}, userRules = [] }) {
   const allGroups = groups;
 
   // Per-column header filter state
@@ -462,19 +472,8 @@ function ComparisonTable({ displayList, recommendedIds, groups = COLUMN_GROUPS, 
     for (const [colKey, selSet] of Object.entries(colFilters)) {
       if (selSet == null) continue;
 
-      // Group-level filter: keep rows that have a hit in at least one selected motif
-      if (colKey.startsWith('__group__')) {
-        const grpName = colKey.slice('__group__'.length);
-        const grp = allGroups.find(g => g.group === grpName);
-        if (!grp) continue;
-        // If all motifs selected, no filtering needed
-        if (grp.motifs.every(m => selSet.has(m.key))) continue;
-        list = list.filter(({ s }) => {
-          const counts = matrix[s.id] || {};
-          return grp.motifs.some(m => selSet.has(m.key) && (counts[m.ruleName] || 0) > 0);
-        });
-        continue;
-      }
+      // Group-level filters control column visibility, not row filtering — skip here
+      if (colKey.startsWith('__group__')) continue;
 
       const allVals = (() => {
         const seen = new Set();
@@ -493,6 +492,22 @@ function ComparisonTable({ displayList, recommendedIds, groups = COLUMN_GROUPS, 
     return list;
   }, [displayList, colFilters, matrix]);
 
+  // Derive hidden motif ruleNames from disabled customRules / userRules
+  const hiddenMotifRules = useMemo(() => {
+    const hidden = new Set();
+    // User rules: disabled state is tracked by matching backend ruleName format
+    const disabledUserRuleNames = new Set(
+      userRules.filter(r => r.enabled === false).map(r => `custom-${r.group}-${r.motif}`)
+    );
+    for (const g of allGroups) {
+      for (const m of g.motifs) {
+        if (customRules[m.ruleName]?.enabled === false) hidden.add(m.ruleName);
+        if (disabledUserRuleNames.has(m.ruleName)) hidden.add(m.ruleName);
+      }
+    }
+    return hidden;
+  }, [allGroups, customRules, userRules]);
+
   // Pagination
   const PAGE_SIZE_OPTIONS = [20, 50, 100, 200];
   const [page, setPage] = useState(1);
@@ -510,6 +525,11 @@ function ComparisonTable({ displayList, recommendedIds, groups = COLUMN_GROUPS, 
 
   // Helper: is column actively filtered (non-trivially)?
   function isColFiltered(colKey) {
+    if (colKey.startsWith('__group__')) {
+      const grpName = colKey.slice('__group__'.length);
+      const grp = allGroups.find(g => g.group === grpName);
+      return grp ? grp.motifs.some(m => hiddenMotifRules.has(m.ruleName)) : false;
+    }
     const selSet = colFilters[colKey];
     if (!selSet || selSet.size === 0) return false;
     const allVals = getColValues(colKey);
@@ -531,15 +551,31 @@ function ComparisonTable({ displayList, recommendedIds, groups = COLUMN_GROUPS, 
   let dropdownPanel = null;
   if (filterDropdown) {
     const { colKey, x, y } = filterDropdown;
+    const isGroupCol = colKey.startsWith('__group__');
     const allVals = getColValues(colKey);
-    const selSet = colFilters[colKey];
+    const selSet = isGroupCol ? null : colFilters[colKey];
     const label = colKey === '__name__' ? '序列名称' : colKey === '__score__' ? '风险评分' : colKey.length > 18 ? colKey.slice(0, 16) + '…' : colKey;
 
+    // For group columns, resolve motif key → ruleName via the group definition
+    const grpDef = isGroupCol
+      ? allGroups.find(g => g.group === colKey.slice('__group__'.length))
+      : null;
+
     function isChecked(val) {
+      if (isGroupCol) {
+        const m = grpDef?.motifs.find(m => m.key === val);
+        return !m || !hiddenMotifRules.has(m.ruleName);
+      }
       return selSet == null || selSet.has(val);
     }
 
     function toggleVal(val) {
+      if (isGroupCol) {
+        // Sync to customRules / userRules so RulesModal stays in sync
+        const m = grpDef?.motifs.find(m => m.key === val);
+        if (m) onToggleRule?.(m.ruleName, hiddenMotifRules.has(m.ruleName)); // hidden → enable; visible → disable
+        return;
+      }
       setColFilters(prev => {
         const prevSet = prev[colKey] ? new Set(prev[colKey]) : new Set(allVals);
         if (prevSet.has(val)) {
@@ -557,17 +593,7 @@ function ComparisonTable({ displayList, recommendedIds, groups = COLUMN_GROUPS, 
       });
     }
 
-    function selectAll() {
-      setColFilters(prev => {
-        const next = { ...prev };
-        delete next[colKey];
-        return next;
-      });
-    }
-
-    function selectNone() {
-      setColFilters(prev => ({ ...prev, [colKey]: new Set() }));
-    }
+    const showSelectAll = !isGroupCol && (colKey === '__name__' || colKey === '__score__');
 
     dropdownPanel = (
       <>
@@ -575,12 +601,18 @@ function ComparisonTable({ displayList, recommendedIds, groups = COLUMN_GROUPS, 
         <div
           style={{ position: 'fixed', top: y, left: x, zIndex: 100 }}
           className="w-52 rounded-xl bg-[#1F1F1F] border border-[#3a3a3a] shadow-2xl shadow-black/50 p-3 space-y-2">
-          <div className="text-xs font-semibold text-slate-300 truncate">{label}</div>
-          <div className="flex items-center gap-2 text-[11px]">
-            <button type="button" onClick={selectAll} className="text-[#5D56C1] hover:underline">全选</button>
-            <span className="text-neutral-600">/</span>
-            <button type="button" onClick={selectNone} className="text-[#5D56C1] hover:underline">全不选</button>
-          </div>
+          {!colKey.startsWith('__group__') && (
+            <div className="text-xs font-semibold text-slate-300 truncate">{label}</div>
+          )}
+          {showSelectAll && (
+            <div className="flex items-center gap-2 text-[11px]">
+              <button type="button" onClick={() => setColFilters(prev => { const next = { ...prev }; delete next[colKey]; return next; })}
+                className="text-[#5D56C1] hover:underline">全选</button>
+              <span className="text-neutral-600">/</span>
+              <button type="button" onClick={() => setColFilters(prev => ({ ...prev, [colKey]: new Set() }))}
+                className="text-[#5D56C1] hover:underline">全不选</button>
+            </div>
+          )}
           <div className="max-h-48 overflow-y-auto space-y-1 pr-1">
             {allVals.map(val => (
               <label key={val} className="flex items-center gap-2 cursor-pointer group">
@@ -607,8 +639,18 @@ function ComparisonTable({ displayList, recommendedIds, groups = COLUMN_GROUPS, 
 
   return (
     <div className="flex-1 flex flex-col min-h-0 gap-2">
-      {/* Toolbar: Filter button + Export button */}
-      <div className="shrink-0 flex justify-end gap-2">
+      {/* Toolbar: Rules + Filter + Export */}
+      <div className="shrink-0 flex items-center justify-between gap-2">
+        {/* Scan rules — primary button, leftmost */}
+        <button type="button" onClick={() => onRulesOpen?.()}
+          disabled={!defaultRules?.length}
+          className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium bg-[#5D56C1] hover:bg-[#6e67d4] text-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+          </svg>
+          扫描规则
+        </button>
+        <div className="flex items-center gap-2">
         {/* Filter toggle */}
         <div className="relative">
           <button type="button" onClick={() => setFilterOpen(v => !v)}
@@ -649,6 +691,7 @@ function ComparisonTable({ displayList, recommendedIds, groups = COLUMN_GROUPS, 
           </svg>
           导出 CSV
         </button>
+        </div>
       </div>
       <div className="flex-1 overflow-auto rounded-2xl bg-[#292929]">
       <table className="text-xs border-collapse" style={{ minWidth: '100%' }}>
@@ -659,7 +702,7 @@ function ComparisonTable({ displayList, recommendedIds, groups = COLUMN_GROUPS, 
               className="group sticky left-0 z-20 bg-[#1F1F1F] px-4 py-3 text-left text-sm font-bold text-slate-200 border-b border-r border-[#3a3a3a] whitespace-nowrap"
               style={{ minWidth: 200, width: 200 }}>
               <div className="flex items-center justify-between gap-1">
-                <span>PROTEIN</span>
+                <span>Candidates</span>
                 <button type="button" onClick={e => openDropdown(e, '__name__')} className="shrink-0">
                   <FunnelIcon active={isColFiltered('__name__')} />
                 </button>
@@ -676,24 +719,36 @@ function ComparisonTable({ displayList, recommendedIds, groups = COLUMN_GROUPS, 
                 </button>
               </div>
             </th>
-            {allGroups.map(g => (
-              <th key={g.group} colSpan={g.motifs.length}
-                className={`group px-2 py-2 text-center text-sm font-bold border-b border-r border-[#3a3a3a] whitespace-nowrap bg-[#1F1F1F] ${g.labelClass}`}>
-                <div className="inline-flex items-center gap-1">
-                  {g.isCustom ? `${g.group}（自定义）` : `${g.groupEn}(${g.group})`}
-                  <button type="button" onClick={e => openDropdown(e, '__group__' + g.group)} className="shrink-0">
-                    <FunnelIcon active={isColFiltered('__group__' + g.group)} />
-                  </button>
-                </div>
+            {showCdrColumn && (
+              <th rowSpan={2}
+                className="sticky z-20 bg-[#1F1F1F] px-3 py-3 text-center text-sm font-bold text-blue-300 border-b border-r border-[#3a3a3a] whitespace-nowrap"
+                style={{ left: 272, minWidth: 76, width: 76 }}>
+                CDR命中数
               </th>
-            ))}
+            )}
+            {allGroups.map(g => {
+              const visibleMotifs = g.motifs.filter(m => !hiddenMotifRules.has(m.ruleName));
+              if (visibleMotifs.length === 0) return null;
+              return (
+                <th key={g.group} colSpan={visibleMotifs.length}
+                  className={`group px-2 py-2 text-center text-sm font-bold border-b border-r border-[#3a3a3a] whitespace-nowrap bg-[#1F1F1F] ${g.labelClass}`}>
+                  <div className="inline-flex items-center gap-1">
+                    {g.isCustom ? `${g.group}（自定义）` : `${g.groupEn}(${g.group})`}
+                    <button type="button" onClick={e => openDropdown(e, '__group__' + g.group)} className="shrink-0">
+                      <FunnelIcon active={isColFiltered('__group__' + g.group)} />
+                    </button>
+                  </div>
+                </th>
+              );
+            })}
           </tr>
           {/* Row 2: motif sub-headers */}
           <tr>
-            {allGroups.map(g =>
-              g.motifs.map((m, mi) => (
+            {allGroups.map(g => {
+              const visibleMotifs = g.motifs.filter(m => !hiddenMotifRules.has(m.ruleName));
+              return visibleMotifs.map((m, mi) => (
                 <th key={m.ruleName}
-                  className={`group px-3 py-1.5 text-center font-mono font-semibold border-b border-[#3a3a3a] whitespace-nowrap bg-[#1F1F1F] ${mi === g.motifs.length - 1 ? 'border-r' : ''} ${m.isCustom ? 'text-violet-400' : cellRiskColor[m.risk]}`}
+                  className={`group px-3 py-1.5 text-center font-mono font-semibold border-b border-[#3a3a3a] whitespace-nowrap bg-[#1F1F1F] ${mi === visibleMotifs.length - 1 ? 'border-r' : ''} ${m.isCustom ? 'text-violet-400' : cellRiskColor[customRules[m.ruleName]?.risk || m.risk]}`}
                   style={{ minWidth: 52 }}>
                   <div className="flex items-center justify-center gap-1">
                     <span translate="no">{m.key}</span>
@@ -703,8 +758,8 @@ function ComparisonTable({ displayList, recommendedIds, groups = COLUMN_GROUPS, 
                     </button>
                   </div>
                 </th>
-              ))
-            )}
+              ));
+            })}
           </tr>
         </thead>
 
@@ -717,6 +772,8 @@ function ComparisonTable({ displayList, recommendedIds, groups = COLUMN_GROUPS, 
             const isError = r?.status === 'error';
             const rowBg = isRecommended ? 'bg-emerald-900/15' : '';
             const stickyBg = isRecommended ? 'bg-[#162b1e]' : 'bg-[#292929]';
+            // score is already computed by calcScore() which respects disabled rules
+            const displayScore = score;
 
             return (
               <tr key={s.id}
@@ -734,32 +791,48 @@ function ComparisonTable({ displayList, recommendedIds, groups = COLUMN_GROUPS, 
                 </td>
                 {/* Sticky: score */}
                 <td className={`sticky ${stickyBg} px-3 py-2.5 text-center border-b border-r border-[#3a3a3a]`} style={{ left: 200 }}>
-                  {score !== null
-                    ? <span className="font-mono font-semibold text-slate-200">{score}</span>
+                  {displayScore !== null
+                    ? <span className="font-mono font-semibold text-slate-200">{displayScore}</span>
                     : isError
                       ? <span className="text-red-400 text-[10px]">失败</span>
                       : <span className="text-neutral-600 text-[10px]">…</span>}
                 </td>
-                {/* Motif counts */}
-                {allGroups.map(g =>
-                  g.motifs.map((m, mi) => {
+                {/* Sticky: CDR hit count */}
+                {showCdrColumn && (
+                  <td className={`sticky ${stickyBg} px-3 py-2.5 text-center border-b border-r border-[#3a3a3a]`} style={{ left: 272 }}>
+                    {isPending ? (
+                      <span className="text-neutral-700">·</span>
+                    ) : isError ? (
+                      <span className="text-neutral-700">—</span>
+                    ) : (() => {
+                      const cdrCount = r?.result?.hotspots?.filter(h =>
+                        h.region?.startsWith('CDR') && !hiddenMotifRules.has(h.rule_name)
+                      ).length ?? 0;
+                      return <span className={cdrCount > 0 ? 'text-blue-300 font-semibold' : 'text-neutral-600'}>{cdrCount}</span>;
+                    })()}
+                  </td>
+                )}
+                {/* Motif counts — skip hidden motifs */}
+                {allGroups.map(g => {
+                  const visibleMotifs = g.motifs.filter(m => !hiddenMotifRules.has(m.ruleName));
+                  return visibleMotifs.map((m, mi) => {
                     const count = counts[m.ruleName] || 0;
                     return (
                       <td key={m.ruleName}
-                        className={`px-2 py-2.5 text-center border-b ${mi === g.motifs.length - 1 ? 'border-r' : ''} border-[#3a3a3a]`}>
+                        className={`px-2 py-2.5 text-center border-b ${mi === visibleMotifs.length - 1 ? 'border-r' : ''} border-[#3a3a3a]`}>
                         {isPending ? (
                           <span className="text-neutral-700">·</span>
                         ) : isError ? (
                           <span className="text-neutral-700">—</span>
                         ) : (
-                          <span className={count > 0 ? cellRiskColor[m.risk] : 'text-neutral-600'}>
+                          <span className={count > 0 ? cellRiskColor[customRules[m.ruleName]?.risk || m.risk] : 'text-neutral-600'}>
                             {count}
                           </span>
                         )}
                       </td>
                     );
-                  })
-                )}
+                  });
+                })}
               </tr>
             );
           })}
@@ -814,10 +887,13 @@ const TOP_OPTIONS = [
 export default function BatchResultsPage() {
   const ctx = useOutletContext();
   const navigate = useNavigate();
-  const { batchSequences, batchResults, batchLoading, batchProgress } = ctx;
+  const { batchSequences, batchResults, batchLoading, batchProgress,
+          defaultRules, customRules, setCustomRules, userRules, setUserRules,
+          runBatchScan } = ctx;
 
   const [selectedId, setSelectedId] = useState(batchSequences?.[0]?.id ?? null);
   const [viewMode, setViewMode] = useState('compare'); // 'compare' | 'detail'
+  const [rulesModalOpen, setRulesModalOpen] = useState(false);
 
   // Compare-view filter state
   const [filterOpen, setFilterOpen]         = useState(false);
@@ -838,6 +914,20 @@ export default function BatchResultsPage() {
   const [detailFilterRsaMin, setDetailFilterRsaMin] = useState(0);
   const [detailFilterRsaMax, setDetailFilterRsaMax] = useState(100);
   const startedFoldRef = useRef(new Set());
+  // Snapshot of userRules IDs at the moment the rules modal opens — used to
+  // detect new rules added during this session and trigger a re-scan.
+  const userRulesSnapshotRef = useRef(null);
+
+  // Toggle a rule's enabled state from either the column header filter or the RulesModal.
+  // Writes directly to customRules / userRules so both UIs stay in sync.
+  const handleToggleRule = useCallback((ruleName, enabled) => {
+    const userRule = userRules.find(ur => `custom-${ur.group}-${ur.motif}` === ruleName);
+    if (userRule) {
+      setUserRules(prev => prev.map(r => r.id === userRule.id ? { ...r, enabled } : r));
+    } else {
+      setCustomRules(prev => ({ ...prev, [ruleName]: { ...(prev[ruleName] || {}), enabled } }));
+    }
+  }, [userRules, setUserRules, setCustomRules]);
 
   // Trigger ESMFold for one sequence in batch detail view
   const predictBatchStructure = useCallback(async (seqId, sequence) => {
@@ -880,7 +970,7 @@ export default function BatchResultsPage() {
     return batchSequences
       .map(s => {
         const r = batchResults.find(r => r.id === s.id);
-        const score = r?.status === 'done' ? calcScore(r.result) : null;
+        const score = r?.status === 'done' ? calcScore(r.result, customRules, userRules) : null;
         return { s, r, score };
       })
       .sort((a, b) => {
@@ -889,7 +979,7 @@ export default function BatchResultsPage() {
         if (b.score === null) return -1;
         return a.score - b.score;
       });
-  }, [batchSequences, batchResults]);
+  }, [batchSequences, batchResults, customRules, userRules]);
 
   // Top 5 recommended: lowest-scoring 5 completed sequences
   const recommendedIds = useMemo(() => {
@@ -898,9 +988,14 @@ export default function BatchResultsPage() {
     );
   }, [scoredList]);
 
+  // True if any completed sequence is identified as an antibody
+  const hasAntibody = useMemo(() =>
+    scoredList.some(({ r }) => r?.result?.protein_type === 'Antibody'),
+  [scoredList]);
+
   // Build the full column group list: predefined + custom motifs merged by group name
   const allColumnGroups = useMemo(() => {
-    // Step 1: collect custom motifs, keyed by their group name
+    // Step 1a: collect custom motifs from scan results
     const customByGroup = new Map(); // group → Map(ruleName → motif def)
     for (const { r } of scoredList) {
       if (r?.status !== 'done' || !r.result?.hotspots) continue;
@@ -922,6 +1017,19 @@ export default function BatchResultsPage() {
         }
       }
     }
+
+    // Step 1b: also include userRules directly so columns appear even with 0 hits
+    for (const ur of userRules) {
+      if (ur.enabled === false || ur.motif === '(待添加)') continue;
+      const group = ur.group;
+      const ruleName = `custom-${group}-${ur.motif}`;
+      if (!customByGroup.has(group)) customByGroup.set(group, new Map());
+      const motifMap = customByGroup.get(group);
+      if (!motifMap.has(ruleName)) {
+        motifMap.set(ruleName, { key: ur.motif, ruleName, risk: ur.risk, isCustom: true });
+      }
+    }
+
     if (customByGroup.size === 0) return COLUMN_GROUPS;
 
     const predefinedNames = new Set(COLUMN_GROUPS.map(g => g.group));
@@ -946,7 +1054,7 @@ export default function BatchResultsPage() {
       }
     }
     return result;
-  }, [scoredList]);
+  }, [scoredList, userRules]);
 
   // Apply filters: Top N + score range
   const displayList = useMemo(() => {
@@ -995,18 +1103,43 @@ export default function BatchResultsPage() {
   return (
     <div className="flex-1 p-4 space-y-2 overflow-hidden flex flex-col">
 
-      {/* Top bar */}
-      <div className="shrink-0 flex items-center justify-between">
-        <button type="button" onClick={() => navigate('/')}
-          className="inline-flex items-center gap-1 text-sm text-slate-400 hover:text-slate-200 transition-colors">
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-          </svg>
-          返回
-        </button>
-        {batchLoading
-          ? <span className="text-sm text-slate-400">扫描中… {batchProgress.done}/{batchProgress.total}</span>
-          : <span className="text-sm text-slate-400">共 {total} 条序列 · 完成 {done}</span>}
+      {/* Top bar — breadcrumb */}
+      <div className="shrink-0 flex items-center justify-between min-w-0 mb-3">
+        {viewMode === 'compare' ? (
+          <nav className="flex items-center gap-1.5 text-sm">
+            <button type="button" onClick={() => navigate('/')}
+              className="inline-flex items-center gap-0.5 text-slate-400 hover:text-slate-200 transition-colors whitespace-nowrap">
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+              </svg>
+              返回上传
+            </button>
+            <span className="text-slate-600">/</span>
+            <span className="text-slate-200">分布对比</span>
+          </nav>
+        ) : (
+          <nav className="flex items-center gap-1.5 text-sm min-w-0">
+            <button type="button" onClick={() => navigate('/')}
+              className="inline-flex items-center gap-0.5 text-slate-400 hover:text-slate-200 transition-colors whitespace-nowrap">
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+              </svg>
+              返回上传
+            </button>
+            <span className="text-slate-600 shrink-0">/</span>
+            <button type="button" onClick={() => setViewMode('compare')}
+              className="text-slate-400 hover:text-slate-200 transition-colors whitespace-nowrap">
+              分布对比
+            </button>
+            <span className="text-slate-600 shrink-0">/</span>
+            <span className="text-slate-200 truncate">候选详情</span>
+          </nav>
+        )}
+        {viewMode === 'compare' && (
+          batchLoading
+            ? <span className="text-sm text-slate-400">扫描中… {batchProgress.done}/{batchProgress.total}</span>
+            : <span className="text-sm text-slate-400">共 {total} 条序列 · 完成 {done}</span>
+        )}
       </div>
 
       {/* Progress bar */}
@@ -1017,19 +1150,6 @@ export default function BatchResultsPage() {
         </div>
       )}
 
-      {/* View toggle — centered, text-base */}
-      <div className="shrink-0 flex justify-center">
-        <div className="flex items-center rounded-lg bg-[#1F1F1F] p-0.5 text-base">
-          <button type="button" onClick={() => setViewMode('compare')}
-            className={`px-4 py-1.5 rounded-md transition-colors ${viewMode === 'compare' ? 'bg-[#5D56C1] text-slate-50' : 'text-slate-400 hover:text-slate-200'}`}>
-            分布对比
-          </button>
-          <button type="button" onClick={() => setViewMode('detail')}
-            className={`px-4 py-1.5 rounded-md transition-colors ${viewMode === 'detail' ? 'bg-[#5D56C1] text-slate-50' : 'text-slate-400 hover:text-slate-200'}`}>
-            详情视图
-          </button>
-        </div>
-      </div>
 
       {/* ── Compare view ── */}
       {viewMode === 'compare' && (() => {
@@ -1046,6 +1166,17 @@ export default function BatchResultsPage() {
             activeFilterCount={activeFilterCount}
             onRowClick={id => { setSelectedId(id); setViewMode('detail'); }}
             onClearFilters={() => { setFilterTopN(0); setFilterScoreMin(''); setFilterScoreMax(''); setHiddenGroups(new Set()); }}
+            showCdrColumn={hasAntibody}
+            onToggleRule={handleToggleRule}
+            onRulesOpen={() => {
+              userRulesSnapshotRef.current = JSON.stringify(
+                userRules.map(r => ({ id: r.id, enabled: r.enabled !== false }))
+              );
+              setRulesModalOpen(true);
+            }}
+            defaultRules={defaultRules}
+            customRules={customRules}
+            userRules={userRules}
             filterBar={
               <div className="flex flex-col gap-3 px-4 py-3">
                 {/* 序列 */}
@@ -1070,26 +1201,6 @@ export default function BatchResultsPage() {
                   <input type="number" min="0" placeholder="最高"
                     value={filterScoreMax} onChange={e => setFilterScoreMax(e.target.value)}
                     className="w-16 px-2 py-1 rounded-md bg-[#292929] border border-[#444] text-xs text-slate-200 placeholder-neutral-600 focus:outline-none focus:border-[#5D56C1]" />
-                </div>
-                {/* 类别 */}
-                <div className="flex items-start gap-2 flex-wrap">
-                  <span className="text-xs text-neutral-500 w-14 shrink-0 pt-0.5">类别</span>
-                  <div className="flex flex-wrap gap-1.5">
-                    {allColumnGroups.map(g => {
-                      const selected = !hiddenGroups.has(g.group);
-                      return (
-                        <button key={g.group} type="button"
-                          onClick={() => setHiddenGroups(prev => {
-                            const next = new Set(prev);
-                            selected ? next.add(g.group) : next.delete(g.group);
-                            return next;
-                          })}
-                          className={`px-2 py-0.5 rounded text-xs border transition-colors ${selected ? `${g.labelClass} border-current` : 'text-neutral-600 border-[#3a3a3a]'}`}>
-                          {g.group}
-                        </button>
-                      );
-                    })}
-                  </div>
                 </div>
               </div>
             }
@@ -1205,9 +1316,16 @@ export default function BatchResultsPage() {
                   (detailFilterRisk.length > 0 ? 1 : 0) +
                   (detailFilterRegion !== 'all' ? 1 : 0) +
                   (detailFilterRsaMin > 0 || detailFilterRsaMax < 100 ? 1 : 0);
+                const userGroupNames = userRules
+                  .filter(ur => ur.enabled !== false && ur.motif !== '(待添加)')
+                  .map(ur => ur.group)
+                  .filter((g, i, a) => a.indexOf(g) === i);
                 const allGroups = [
                   ...groupOrder,
-                  ...hotspots.map(h => h.group).filter(g => !groupOrder.includes(g)).filter((g, i, a) => a.indexOf(g) === i),
+                  ...[
+                    ...hotspots.map(h => h.group).filter(g => !groupOrder.includes(g)),
+                    ...userGroupNames.filter(g => !groupOrder.includes(g)),
+                  ].filter((g, i, a) => a.indexOf(g) === i),
                 ];
                 return (
                   <div className="flex-1 rounded-2xl bg-[#292929] px-5 py-4 flex flex-col overflow-hidden min-w-0">
@@ -1458,6 +1576,28 @@ export default function BatchResultsPage() {
           </div>
         );
       })()}
+
+      {/* 扫描规则弹窗 */}
+      <RulesModal
+        open={rulesModalOpen}
+        onClose={() => {
+          setRulesModalOpen(false);
+          // Re-scan if user rules changed (new rules added, or enabled status toggled)
+          if (
+            !batchLoading &&
+            userRulesSnapshotRef.current !== null &&
+            JSON.stringify(userRules.map(r => ({ id: r.id, enabled: r.enabled !== false }))) !== userRulesSnapshotRef.current
+          ) {
+            runBatchScan(batchSequences);
+          }
+          userRulesSnapshotRef.current = null;
+        }}
+        defaultRules={defaultRules}
+        customRules={customRules}
+        setCustomRules={setCustomRules}
+        userRules={userRules}
+        setUserRules={setUserRules}
+      />
     </div>
   );
 }
