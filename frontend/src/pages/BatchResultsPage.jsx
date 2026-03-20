@@ -460,7 +460,7 @@ function ComparisonTable({ displayList, recommendedIds, groups = COLUMN_GROUPS, 
   const filteredList = useMemo(() => {
     let list = displayList;
     for (const [colKey, selSet] of Object.entries(colFilters)) {
-      if (!selSet || selSet.size === 0) continue;
+      if (selSet == null) continue;
 
       // Group-level filter: keep rows that have a hit in at least one selected motif
       if (colKey.startsWith('__group__')) {
@@ -536,7 +536,7 @@ function ComparisonTable({ displayList, recommendedIds, groups = COLUMN_GROUPS, 
     const label = colKey === '__name__' ? '序列名称' : colKey === '__score__' ? '风险评分' : colKey.length > 18 ? colKey.slice(0, 16) + '…' : colKey;
 
     function isChecked(val) {
-      return !selSet || selSet.size === 0 || selSet.has(val);
+      return selSet == null || selSet.has(val);
     }
 
     function toggleVal(val) {
