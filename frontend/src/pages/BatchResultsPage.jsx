@@ -436,6 +436,12 @@ function ComparisonTable({ displayList, recommendedIds, groups = COLUMN_GROUPS, 
 
   // Helper: collect unique sorted values for a column across all displayList rows
   function getColValues(colKey) {
+    // Group-level filter: options are the motif keys within that group
+    if (colKey.startsWith('__group__')) {
+      const grpName = colKey.slice('__group__'.length);
+      const grp = allGroups.find(g => g.group === grpName);
+      return grp ? grp.motifs.map(m => m.key) : [];
+    }
     const seen = new Set();
     for (const { s, score } of displayList) {
       const counts = matrix[s.id] || {};
@@ -455,6 +461,21 @@ function ComparisonTable({ displayList, recommendedIds, groups = COLUMN_GROUPS, 
     let list = displayList;
     for (const [colKey, selSet] of Object.entries(colFilters)) {
       if (!selSet || selSet.size === 0) continue;
+
+      // Group-level filter: keep rows that have a hit in at least one selected motif
+      if (colKey.startsWith('__group__')) {
+        const grpName = colKey.slice('__group__'.length);
+        const grp = allGroups.find(g => g.group === grpName);
+        if (!grp) continue;
+        // If all motifs selected, no filtering needed
+        if (grp.motifs.every(m => selSet.has(m.key))) continue;
+        list = list.filter(({ s }) => {
+          const counts = matrix[s.id] || {};
+          return grp.motifs.some(m => selSet.has(m.key) && (counts[m.ruleName] || 0) > 0);
+        });
+        continue;
+      }
+
       const allVals = (() => {
         const seen = new Set();
         for (const { s, score } of displayList) {
