@@ -1373,7 +1373,7 @@ export default function BatchResultsPage() {
                           <button type="button"
                             onClick={() => exportDetailCsv(selectedResult?.result, selectedEntry?.s.name)}
                             className="inline-flex items-center justify-center rounded-lg bg-[#5D56C1] hover:bg-[#6d66d4] active:bg-[#4a44a8] px-4 py-2 text-sm font-medium text-slate-50 transition-colors">
-                            导出 Excel
+                            导出 CSV
                           </button>
                           {/* 筛选弹窗 */}
                           {detailFilterOpen && (
