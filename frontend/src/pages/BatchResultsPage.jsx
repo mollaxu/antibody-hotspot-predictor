@@ -965,6 +965,20 @@ export default function BatchResultsPage() {
     setDetailFilterRsaMax(100);
   }, [selectedId]);
 
+  // Auto-scroll the matching hotspot list item when a residue is selected via SequenceStrip
+  useEffect(() => {
+    if (viewMode !== 'detail' || !detailSelectedResidue) return;
+    const hotspots = selectedResult?.result?.hotspots ?? [];
+    const h = hotspots.find(h =>
+      detailSelectedResidue - 1 >= (h.start ?? 0) &&
+      detailSelectedResidue - 1 < (h.end ?? (h.start ?? 0) + 1)
+    );
+    if (!h) return;
+    const globalIdx = hotspots.indexOf(h);
+    const el = document.getElementById(`batch-hotspot-${h.start ?? 0}-${h.end ?? 0}-${globalIdx}`);
+    el?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }, [detailSelectedResidue, viewMode]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Attach scores, sort ascending (pending last) — must be before the useEffect that depends on it
   const scoredList = useMemo(() => {
     return batchSequences
@@ -1532,8 +1546,17 @@ export default function BatchResultsPage() {
                                         <span className="text-sm text-neutral-500">共 {items.length} 个风险位点</span>
                                       </div>
                                       <ul className="space-y-2">
-                                        {items.map((h, idx) => (
-                                          <li key={idx} className="rounded-lg px-3 py-2.5 bg-[#292929]">
+                                        {items.map((h, idx) => {
+                                          const isSelected =
+                                            detailSelectedResidue != null &&
+                                            detailSelectedResidue - 1 >= (h.start ?? 0) &&
+                                            detailSelectedResidue - 1 < (h.end ?? (h.start ?? 0) + 1);
+                                          const globalIdx = hotspots.indexOf(h);
+                                          const itemId = `batch-hotspot-${h.start ?? 0}-${h.end ?? 0}-${globalIdx}`;
+                                          return (
+                                          <li key={idx} id={itemId}
+                                            className={`rounded-lg px-3 py-2.5 cursor-pointer transition-colors ${isSelected ? 'bg-[#3b3b3b] ring-1 ring-[#5D56C1]' : 'bg-[#292929] hover:bg-[#333333]'}`}
+                                            onClick={() => setDetailSelectedResidue(prev => prev === h.start + 1 ? null : h.start + 1)}>
                                             <div className="flex items-center justify-between gap-2">
                                               <div className="font-semibold text-slate-50 text-sm">
                                                 基序：<span translate="no">{h.motif}</span>
@@ -1556,7 +1579,8 @@ export default function BatchResultsPage() {
                                               <span>{h.region && h.region !== 'N/A' ? '| ' : ''}RSA：{h.rsa >= 0 ? `${(h.rsa * 100).toFixed(1)}%` : 'N/A'}</span>
                                             </div>
                                           </li>
-                                        ))}
+                                          );
+                                        })}
                                       </ul>
                                     </div>
                                   );
