@@ -441,8 +441,8 @@ export default function InputPage() {
               <p className="text-sm text-red-400">{batchParseError}</p>
             )}
 
-            {/* 序列预览列表 */}
-            {batchSequences.length > 0 && (
+            {/* 序列预览列表：超过 30 条不展示 */}
+            {batchSequences.length > 0 && batchSequences.length <= 30 && (
               <div className="rounded-xl bg-[#1F1F1F] overflow-hidden">
                 <div className="grid grid-cols-[2rem_1fr_4rem_minmax(0,1fr)] gap-3 px-4 py-2 border-b border-[#333] text-xs text-neutral-500">
                   <span>#</span><span>名称</span><span className="text-right">长度</span><span>序列预览</span>

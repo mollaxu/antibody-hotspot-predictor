@@ -54,6 +54,10 @@ function ScoreTooltip() {
           <span className="font-mono text-[11px]">
             (N<sub className="text-orange-400">Medium</sub><span className="text-slate-400"> × </span><span className="text-orange-400">2</span>)
           </span>
+          <span className="font-mono text-[11px] text-slate-600"> + </span>
+          <span className="font-mono text-[11px]">
+            (N<sub className="text-yellow-300">Low</sub><span className="text-slate-400"> × </span><span className="text-yellow-300">1</span>)
+          </span>
         </div>
       </div>
     </span>
@@ -230,7 +234,7 @@ const COLUMN_GROUPS = [
   },
 ];
 
-/** 风险评分：Total_Score = N_Critical×10 + N_High×5 + N_Medium×2 */
+/** 风险评分：Total_Score = N_Critical×10 + N_High×5 + N_Medium×2 + N_Low×1 */
 function calcScore(result) {
   if (!result?.hotspots) return null;
   let score = 0;
@@ -239,6 +243,7 @@ function calcScore(result) {
     if (r === 'Critical')    score += 10;
     else if (r === 'High')   score += 5;
     else if (r === 'Medium') score += 2;
+    else if (r === 'Low')    score += 1;
   }
   return score;
 }
@@ -467,6 +472,14 @@ function ComparisonTable({ displayList, recommendedIds, groups = COLUMN_GROUPS, 
     return list;
   }, [displayList, colFilters, matrix]);
 
+  // Pagination
+  const PAGE_SIZE_OPTIONS = [20, 50, 100, 200];
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50);
+  useEffect(() => { setPage(1); }, [filteredList]);
+  const totalPages = Math.max(1, Math.ceil(filteredList.length / pageSize));
+  const pagedList = filteredList.slice((page - 1) * pageSize, page * pageSize);
+
   // Helper: open dropdown for a column header
   function openDropdown(e, colKey) {
     e.stopPropagation();
@@ -676,7 +689,7 @@ function ComparisonTable({ displayList, recommendedIds, groups = COLUMN_GROUPS, 
 
         <tbody>
           {/* Data rows */}
-          {filteredList.map(({ s, r, score }) => {
+          {pagedList.map(({ s, r, score }) => {
             const isRecommended = recommendedIds.has(s.id);
             const counts = matrix[s.id] || {};
             const isPending = r?.status !== 'done' && r?.status !== 'error';
@@ -732,6 +745,35 @@ function ComparisonTable({ displayList, recommendedIds, groups = COLUMN_GROUPS, 
         </tbody>
       </table>
       </div>
+
+      {/* Paginator */}
+      <div className="shrink-0 flex items-center justify-between gap-3 px-1 py-1">
+        <span className="text-xs text-neutral-500">共 {filteredList.length} 条</span>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-neutral-500">每页</span>
+          <select
+            value={pageSize}
+            onChange={e => { setPageSize(Number(e.target.value)); setPage(1); }}
+            className="text-xs rounded bg-[#292929] border border-[#3a3a3a] text-slate-300 px-1.5 py-1 focus:outline-none focus:border-[#5D56C1] cursor-pointer">
+            {PAGE_SIZE_OPTIONS.map(n => <option key={n} value={n}>{n}</option>)}
+          </select>
+          <span className="text-xs text-neutral-500">条</span>
+          <button type="button" disabled={page <= 1} onClick={() => setPage(p => p - 1)}
+            className="p-1 rounded text-slate-400 hover:text-slate-200 disabled:opacity-30 transition-colors">
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+            </svg>
+          </button>
+          <span className="text-xs text-neutral-400 tabular-nums">{page} / {totalPages}</span>
+          <button type="button" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}
+            className="p-1 rounded text-slate-400 hover:text-slate-200 disabled:opacity-30 transition-colors">
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
+        </div>
+      </div>
+
       {/* Column filter dropdown portal */}
       {dropdownPanel}
     </div>
