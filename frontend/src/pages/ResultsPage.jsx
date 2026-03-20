@@ -198,14 +198,14 @@ export default function ResultsPage() {
 
                       {/* 类别（多选） */}
                       <div className="space-y-2">
-                        <span className="text-xs font-medium text-neutral-400">类别 {filterGroup.length > 0 && <span className="text-[#8b85e0]">({filterGroup.length})</span>}</span>
+                        <span className="text-xs font-medium text-neutral-400">类别 {filterGroup.size > 0 && <span className="text-[#8b85e0]">({filterGroup.size})</span>}</span>
                         <div className="flex flex-wrap gap-1.5">
                           {[...groupOrder, ...(result?.hotspots || []).map(h => h.group).filter(g => !groupOrder.includes(g)).filter((g, i, a) => a.indexOf(g) === i)].map((g) => {
-                            const active = filterGroup.includes(g);
+                            const selected = !filterGroup.has(g);
                             return (
                               <button key={g} type="button"
-                                onClick={() => setFilterGroup(prev => active ? prev.filter(x => x !== g) : [...prev, g])}
-                                className={`px-2 py-1 rounded-md text-xs transition-colors ${active ? 'bg-[#5D56C1] text-slate-50' : 'bg-[#292929] text-slate-400 hover:text-slate-200'}`}>
+                                onClick={() => setFilterGroup(prev => { const next = new Set(prev); selected ? next.add(g) : next.delete(g); return next; })}
+                                className={`px-2 py-1 rounded-md text-xs transition-colors ${selected ? 'bg-[#5D56C1] text-slate-50' : 'bg-[#292929] text-slate-400 hover:text-slate-200'}`}>
                                 {g}
                               </button>
                             );
@@ -303,7 +303,7 @@ export default function ResultsPage() {
                           确定
                         </button>
                         <button type="button"
-                          onClick={() => { setFilterRegion('all'); setFilterGroup([]); setFilterRisk([]); setFilterChains([]); setFilterRsaMin(0); setFilterRsaMax(100); }}
+                          onClick={() => { setFilterRegion('all'); setFilterGroup(new Set()); setFilterRisk([]); setFilterChains([]); setFilterRsaMin(0); setFilterRsaMax(100); }}
                           className="flex-1 px-3 py-2 rounded-lg text-xs text-slate-400 hover:text-slate-200 bg-[#292929] transition-colors"
                         >
                           清空筛选
@@ -329,7 +329,7 @@ export default function ResultsPage() {
                 {result.hotspots && result.hotspots.length > 0 ? (
                   <div className="text-sm">
                     {[...groupOrder, ...(result.hotspots || []).map(h => h.group).filter(g => !groupOrder.includes(g)).filter((g, i, a) => a.indexOf(g) === i)]
-                      .filter((g) => filterGroup.length === 0 || filterGroup.includes(g))
+                      .filter((g) => !filterGroup.has(g))
                       .map((groupLabel) => {
                       const groupItems = result.hotspots
                         .filter((h) => h.group === groupLabel)

@@ -28,7 +28,7 @@ function App() {
   const [foldingStatus, setFoldingStatus] = useState('');
   const [foldingError, setFoldingError] = useState('');
   const [filterRegion, setFilterRegion] = useState('all');
-  const [filterGroup, setFilterGroup] = useState([]);   // [] = 全部
+  const [filterGroup, setFilterGroup] = useState(new Set()); // empty = 全部，有值 = 隐藏这些组
   const [filterRisk, setFilterRisk] = useState([]);     // [] = 全部
   const [filterChains, setFilterChains] = useState([]);
   const [filterRsaMin, setFilterRsaMin] = useState(0);
@@ -92,7 +92,7 @@ function App() {
   const isResultsPage = ['/results', '/batch-results'].includes(useLocation().pathname);
 
   const rsaFiltered = filterRsaMin > 0 || filterRsaMax < 100;
-  const activeFilterCount = (filterRegion !== 'all' ? 1 : 0) + (filterGroup.length > 0 ? 1 : 0) + (filterRisk.length > 0 ? 1 : 0) + (filterChains.length > 0 ? 1 : 0) + (rsaFiltered ? 1 : 0);
+  const activeFilterCount = (filterRegion !== 'all' ? 1 : 0) + (filterGroup.size > 0 ? 1 : 0) + (filterRisk.length > 0 ? 1 : 0) + (filterChains.length > 0 ? 1 : 0) + (rsaFiltered ? 1 : 0);
 
   const getChainAt = (pos) => {
     for (const c of chainInfo) {
@@ -109,7 +109,7 @@ function App() {
   const runScan = async (rawSeq) => {
     setError('');
     setResult(null);
-    setFilterGroup([]);
+    setFilterGroup(new Set());
     setFilterRisk([]);
     setFilterRegion('all');
     setFilterChains([]);
@@ -320,7 +320,7 @@ function App() {
     setFoldingStatus('');
     setFoldingError('');
     setFilterRegion('all');
-    setFilterGroup([]);
+    setFilterGroup(new Set());
     setFilterRisk([]);
     setFilterChains([]);
     setFilterRsaMin(0);

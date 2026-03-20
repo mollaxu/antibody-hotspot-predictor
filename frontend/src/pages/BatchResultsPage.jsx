@@ -394,8 +394,12 @@ function exportComparison(displayList, groups, matrix) {
 
 // ─── ComparisonTable ───────────────────────────────────────────────────────
 
-function ComparisonTable({ displayList, recommendedIds, groups = COLUMN_GROUPS, filterOpen, setFilterOpen, activeFilterCount = 0, filterBar }) {
+function ComparisonTable({ displayList, recommendedIds, groups = COLUMN_GROUPS, filterOpen, setFilterOpen, activeFilterCount = 0, filterBar, onClearFilters, onRowClick }) {
   const allGroups = groups;
+
+  // Per-column header filter state
+  const [colFilters, setColFilters] = useState({});
+  const [filterDropdown, setFilterDropdown] = useState(null); // null | { colKey, x, y }
 
   // Build ruleName → count map per sequence
   const matrix = useMemo(() => {
@@ -412,29 +416,199 @@ function ComparisonTable({ displayList, recommendedIds, groups = COLUMN_GROUPS, 
     return result;
   }, [displayList]);
 
+  // Helper: get the display cell value for a given colKey and row data
+  function getCellValue(colKey, s, score, counts) {
+    if (colKey === '__name__') return s.name;
+    if (colKey === '__score__') return score === null ? '—' : String(score);
+    if (colKey.startsWith('__group__')) {
+      const groupName = colKey.slice(9);
+      const g = allGroups.find(x => x.group === groupName);
+      if (!g) return '0';
+      return String(g.motifs.reduce((sum, m) => sum + (counts[m.ruleName] || 0), 0));
+    }
+    return String(counts[colKey] || 0);
+  }
+
+  // Helper: collect unique sorted values for a column across all displayList rows
+  function getColValues(colKey) {
+    const seen = new Set();
+    for (const { s, score } of displayList) {
+      const counts = matrix[s.id] || {};
+      seen.add(getCellValue(colKey, s, score, counts));
+    }
+    const vals = Array.from(seen);
+    vals.sort((a, b) => {
+      const na = Number(a), nb = Number(b);
+      if (!isNaN(na) && !isNaN(nb)) return na - nb;
+      return a.localeCompare(b);
+    });
+    return vals;
+  }
+
+  // Compute filteredList applying active colFilters
+  const filteredList = useMemo(() => {
+    let list = displayList;
+    for (const [colKey, selSet] of Object.entries(colFilters)) {
+      if (!selSet || selSet.size === 0) continue;
+      const allVals = (() => {
+        const seen = new Set();
+        for (const { s, score } of displayList) {
+          const counts = matrix[s.id] || {};
+          seen.add(getCellValue(colKey, s, score, counts));
+        }
+        return seen;
+      })();
+      if (selSet.size >= allVals.size) continue; // all selected = no filter
+      list = list.filter(({ s, score }) => {
+        const counts = matrix[s.id] || {};
+        return selSet.has(getCellValue(colKey, s, score, counts));
+      });
+    }
+    return list;
+  }, [displayList, colFilters, matrix]);
+
+  // Helper: open dropdown for a column header
+  function openDropdown(e, colKey) {
+    e.stopPropagation();
+    const rect = e.currentTarget.getBoundingClientRect();
+    setFilterDropdown({ colKey, x: rect.left, y: rect.bottom + 4 });
+  }
+
+  // Helper: is column actively filtered (non-trivially)?
+  function isColFiltered(colKey) {
+    const selSet = colFilters[colKey];
+    if (!selSet || selSet.size === 0) return false;
+    const allVals = getColValues(colKey);
+    return selSet.size < allVals.length;
+  }
+
+  // Funnel icon SVG
+  function FunnelIcon({ active }) {
+    return (
+      <svg
+        className={`w-3 h-3 shrink-0 transition-opacity ${active ? 'opacity-100 text-[#5D56C1]' : 'opacity-0 group-hover:opacity-100 text-neutral-400 hover:text-slate-200'}`}
+        fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 01.707 1.707L14 12.414V19a1 1 0 01-1.447.894l-4-2A1 1 0 018 17v-4.586L3.293 5.707A1 1 0 013 5V4z" />
+      </svg>
+    );
+  }
+
+  // Dropdown panel content
+  let dropdownPanel = null;
+  if (filterDropdown) {
+    const { colKey, x, y } = filterDropdown;
+    const allVals = getColValues(colKey);
+    const selSet = colFilters[colKey];
+    const label = colKey === '__name__' ? '序列名称' : colKey === '__score__' ? '风险评分' : colKey.length > 18 ? colKey.slice(0, 16) + '…' : colKey;
+
+    function isChecked(val) {
+      return !selSet || selSet.size === 0 || selSet.has(val);
+    }
+
+    function toggleVal(val) {
+      setColFilters(prev => {
+        const prevSet = prev[colKey] ? new Set(prev[colKey]) : new Set(allVals);
+        if (prevSet.has(val)) {
+          prevSet.delete(val);
+        } else {
+          prevSet.add(val);
+        }
+        // If all selected, clear the filter
+        if (prevSet.size >= allVals.length) {
+          const next = { ...prev };
+          delete next[colKey];
+          return next;
+        }
+        return { ...prev, [colKey]: prevSet };
+      });
+    }
+
+    function selectAll() {
+      setColFilters(prev => {
+        const next = { ...prev };
+        delete next[colKey];
+        return next;
+      });
+    }
+
+    function selectNone() {
+      setColFilters(prev => ({ ...prev, [colKey]: new Set() }));
+    }
+
+    dropdownPanel = (
+      <>
+        <div className="fixed inset-0 z-[90]" onClick={() => setFilterDropdown(null)} />
+        <div
+          style={{ position: 'fixed', top: y, left: x, zIndex: 100 }}
+          className="w-52 rounded-xl bg-[#1F1F1F] border border-[#3a3a3a] shadow-2xl shadow-black/50 p-3 space-y-2">
+          <div className="text-xs font-semibold text-slate-300 truncate">{label}</div>
+          <div className="flex items-center gap-2 text-[11px]">
+            <button type="button" onClick={selectAll} className="text-[#5D56C1] hover:underline">全选</button>
+            <span className="text-neutral-600">/</span>
+            <button type="button" onClick={selectNone} className="text-[#5D56C1] hover:underline">全不选</button>
+          </div>
+          <div className="max-h-48 overflow-y-auto space-y-1 pr-1">
+            {allVals.map(val => (
+              <label key={val} className="flex items-center gap-2 cursor-pointer group">
+                <input
+                  type="checkbox"
+                  className="accent-[#5D56C1] shrink-0"
+                  checked={isChecked(val)}
+                  onChange={() => toggleVal(val)}
+                />
+                <span className="text-[11px] text-slate-300 truncate group-hover:text-slate-100" title={val}>{val}</span>
+              </label>
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={() => setFilterDropdown(null)}
+            className="w-full py-1 rounded-lg bg-[#5D56C1] hover:bg-[#6e67d4] text-xs text-white transition-colors">
+            确定
+          </button>
+        </div>
+      </>
+    );
+  }
+
   return (
     <div className="flex-1 flex flex-col min-h-0 gap-2">
       {/* Toolbar: Filter button + Export button */}
       <div className="shrink-0 flex justify-end gap-2">
         {/* Filter toggle */}
-        <button type="button" onClick={() => setFilterOpen(v => !v)}
-          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-colors border ${
-            filterOpen
-              ? 'bg-[#292929] border-[#5D56C1] text-slate-200'
-              : 'bg-[#1F1F1F] border-[#3a3a3a] text-slate-400 hover:text-slate-200 hover:border-[#555]'
-          }`}>
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M3 4h18M7 8h10M10 12h4" />
-          </svg>
-          筛选
-          {activeFilterCount > 0 && (
-            <span className="ml-0.5 min-w-[16px] h-4 flex items-center justify-center rounded-full bg-[#5D56C1] text-[10px] text-white px-1">
-              {activeFilterCount}
-            </span>
+        <div className="relative">
+          <button type="button" onClick={() => setFilterOpen(v => !v)}
+            className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+              activeFilterCount > 0
+                ? 'bg-[#5D56C1]/20 text-[#a5a0f3] ring-1 ring-[#5D56C1]/40'
+                : 'bg-[#1F1F1F] text-slate-400 hover:text-slate-200'
+            }`}>
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+            </svg>
+            筛选{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}
+          </button>
+          {filterOpen && filterBar && (
+            <>
+              <div className="fixed inset-0 z-40" onClick={() => setFilterOpen(false)} />
+              <div className="absolute right-0 top-full mt-2 z-50 w-80 rounded-xl bg-[#1F1F1F] border border-[#3a3a3a] shadow-2xl shadow-black/40">
+                {filterBar}
+                <div className="flex items-center gap-2 px-4 pb-4">
+                  <button type="button" onClick={() => setFilterOpen(false)}
+                    className="flex-1 px-3 py-2 rounded-lg bg-[#5D56C1] text-xs text-slate-50 hover:bg-[#6d66d4] transition-colors">
+                    确定
+                  </button>
+                  <button type="button" onClick={() => { onClearFilters?.(); setFilterOpen(false); }}
+                    className="flex-1 px-3 py-2 rounded-lg text-xs text-slate-400 hover:text-slate-200 bg-[#292929] transition-colors">
+                    清空筛选
+                  </button>
+                </div>
+              </div>
+            </>
           )}
-        </button>
+        </div>
         {/* Export */}
-        <button type="button" onClick={() => exportComparison(displayList, allGroups, matrix)}
+        <button type="button" onClick={() => exportComparison(filteredList, allGroups, matrix)}
           className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm bg-[#5D56C1] hover:bg-[#6e67d4] text-slate-50 transition-colors">
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
@@ -442,34 +616,41 @@ function ComparisonTable({ displayList, recommendedIds, groups = COLUMN_GROUPS, 
           导出 CSV
         </button>
       </div>
-      {/* Collapsible filter panel */}
-      {filterOpen && filterBar && (
-        <div className="shrink-0 rounded-xl bg-[#1F1F1F] border border-[#3a3a3a]">
-          {filterBar}
-        </div>
-      )}
       <div className="flex-1 overflow-auto rounded-2xl bg-[#292929]">
       <table className="text-xs border-collapse" style={{ minWidth: '100%' }}>
         <thead className="sticky top-0 z-10">
           {/* Row 1: group headers */}
           <tr>
             <th rowSpan={2}
-              className="sticky left-0 z-20 bg-[#1F1F1F] px-4 py-3 text-left text-sm font-bold text-slate-200 border-b border-r border-[#3a3a3a] whitespace-nowrap"
+              className="group sticky left-0 z-20 bg-[#1F1F1F] px-4 py-3 text-left text-sm font-bold text-slate-200 border-b border-r border-[#3a3a3a] whitespace-nowrap"
               style={{ minWidth: 200, width: 200 }}>
-              PROTEIN
+              <div className="flex items-center justify-between gap-1">
+                <span>PROTEIN</span>
+                <button type="button" onClick={e => openDropdown(e, '__name__')} className="shrink-0">
+                  <FunnelIcon active={isColFiltered('__name__')} />
+                </button>
+              </div>
             </th>
             <th rowSpan={2}
-              className="sticky z-20 bg-[#1F1F1F] px-3 py-3 text-center text-sm font-bold text-slate-200 border-b border-r border-[#3a3a3a] whitespace-nowrap"
+              className="group sticky z-20 bg-[#1F1F1F] px-3 py-3 text-center text-sm font-bold text-slate-200 border-b border-r border-[#3a3a3a] whitespace-nowrap"
               style={{ left: 200, minWidth: 72, width: 72 }}>
               <div className="flex items-center justify-center gap-1">
                 风险评分
                 <ScoreTooltip />
+                <button type="button" onClick={e => openDropdown(e, '__score__')} className="shrink-0">
+                  <FunnelIcon active={isColFiltered('__score__')} />
+                </button>
               </div>
             </th>
             {allGroups.map(g => (
               <th key={g.group} colSpan={g.motifs.length}
-                className={`px-2 py-2 text-center text-sm font-bold border-b border-r border-[#3a3a3a] whitespace-nowrap bg-[#1F1F1F] ${g.labelClass}`}>
-                {g.isCustom ? `${g.group}（自定义）` : `${g.groupEn}(${g.group})`}
+                className={`group px-2 py-2 text-center text-sm font-bold border-b border-r border-[#3a3a3a] whitespace-nowrap bg-[#1F1F1F] ${g.labelClass}`}>
+                <div className="inline-flex items-center gap-1">
+                  {g.isCustom ? `${g.group}（自定义）` : `${g.groupEn}(${g.group})`}
+                  <button type="button" onClick={e => openDropdown(e, '__group__' + g.group)} className="shrink-0">
+                    <FunnelIcon active={isColFiltered('__group__' + g.group)} />
+                  </button>
+                </div>
               </th>
             ))}
           </tr>
@@ -478,10 +659,15 @@ function ComparisonTable({ displayList, recommendedIds, groups = COLUMN_GROUPS, 
             {allGroups.map(g =>
               g.motifs.map((m, mi) => (
                 <th key={m.ruleName}
-                  className={`px-3 py-1.5 text-center font-mono font-semibold border-b border-[#3a3a3a] whitespace-nowrap bg-[#1F1F1F] ${mi === g.motifs.length - 1 ? 'border-r' : ''} ${m.isCustom ? 'text-violet-400' : cellRiskColor[m.risk]}`}
+                  className={`group px-3 py-1.5 text-center font-mono font-semibold border-b border-[#3a3a3a] whitespace-nowrap bg-[#1F1F1F] ${mi === g.motifs.length - 1 ? 'border-r' : ''} ${m.isCustom ? 'text-violet-400' : cellRiskColor[m.risk]}`}
                   style={{ minWidth: 52 }}>
-                  <span translate="no">{m.key}</span>
-                  {m.isCustom && <span className="ml-0.5 text-[9px] text-violet-500">*</span>}
+                  <div className="flex items-center justify-center gap-1">
+                    <span translate="no">{m.key}</span>
+                    {m.isCustom && <span className="ml-0.5 text-[9px] text-violet-500">*</span>}
+                    <button type="button" onClick={e => openDropdown(e, m.ruleName)} className="shrink-0">
+                      <FunnelIcon active={isColFiltered(m.ruleName)} />
+                    </button>
+                  </div>
                 </th>
               ))
             )}
@@ -490,7 +676,7 @@ function ComparisonTable({ displayList, recommendedIds, groups = COLUMN_GROUPS, 
 
         <tbody>
           {/* Data rows */}
-          {displayList.map(({ s, r, score }) => {
+          {filteredList.map(({ s, r, score }) => {
             const isRecommended = recommendedIds.has(s.id);
             const counts = matrix[s.id] || {};
             const isPending = r?.status !== 'done' && r?.status !== 'error';
@@ -499,7 +685,9 @@ function ComparisonTable({ displayList, recommendedIds, groups = COLUMN_GROUPS, 
             const stickyBg = isRecommended ? 'bg-[#162b1e]' : 'bg-[#292929]';
 
             return (
-              <tr key={s.id} className={`${rowBg} hover:brightness-110 transition-all`}>
+              <tr key={s.id}
+                className={`${rowBg} hover:brightness-110 transition-all ${onRowClick ? 'cursor-pointer' : ''}`}
+                onClick={() => onRowClick?.(s.id)}>
                 {/* Sticky: name */}
                 <td className={`sticky left-0 ${stickyBg} px-4 py-2.5 border-b border-r border-[#3a3a3a] whitespace-nowrap`} style={{ width: 200 }}>
                   <div className="flex items-center gap-1.5">
@@ -544,6 +732,8 @@ function ComparisonTable({ displayList, recommendedIds, groups = COLUMN_GROUPS, 
         </tbody>
       </table>
       </div>
+      {/* Column filter dropdown portal */}
+      {dropdownPanel}
     </div>
   );
 }
@@ -574,13 +764,12 @@ export default function BatchResultsPage() {
   const [hiddenGroups, setHiddenGroups]     = useState(new Set());
 
   // Detail-view state
-  const [detailSortOrder, setDetailSortOrder]             = useState('asc'); // 'asc' | 'desc'
   const [batchFolding, setBatchFolding]                   = useState({}); // seqId → {status,pdbUrl,pdbText,error}
   const [detailSelectedResidue, setDetailSelectedResidue] = useState(null);
 
   // Detail-view filter state
   const [detailFilterOpen, setDetailFilterOpen]     = useState(false);
-  const [detailFilterGroup, setDetailFilterGroup]   = useState([]);
+  const [detailFilterGroup, setDetailFilterGroup]   = useState(new Set());
   const [detailFilterRisk, setDetailFilterRisk]     = useState([]);
   const [detailFilterRegion, setDetailFilterRegion] = useState('all');
   const [detailFilterRsaMin, setDetailFilterRsaMin] = useState(0);
@@ -616,7 +805,7 @@ export default function BatchResultsPage() {
   // Reset detail filters when selected sequence changes
   useEffect(() => {
     setDetailFilterOpen(false);
-    setDetailFilterGroup([]);
+    setDetailFilterGroup(new Set());
     setDetailFilterRisk([]);
     setDetailFilterRegion('all');
     setDetailFilterRsaMin(0);
@@ -708,12 +897,7 @@ export default function BatchResultsPage() {
     return list;
   }, [scoredList, filterTopN, filterScoreMin, filterScoreMax]);
 
-  // Detail-view ordered list (respects sort toggle)
-  const detailList = useMemo(() =>
-    detailSortOrder === 'asc' ? displayList : [...displayList].reverse(),
-  [displayList, detailSortOrder]);
-
-  // Visible column groups (hide toggled-off groups)
+  // Visible column groups (opt-in: empty = show all, non-empty = show only selected)
   const visibleColumnGroups = useMemo(() =>
     hiddenGroups.size === 0 ? allColumnGroups : allColumnGroups.filter(g => !hiddenGroups.has(g.group)),
   [allColumnGroups, hiddenGroups]);
@@ -797,6 +981,8 @@ export default function BatchResultsPage() {
             filterOpen={filterOpen}
             setFilterOpen={setFilterOpen}
             activeFilterCount={activeFilterCount}
+            onRowClick={id => { setSelectedId(id); setViewMode('detail'); }}
+            onClearFilters={() => { setFilterTopN(0); setFilterScoreMin(''); setFilterScoreMax(''); setHiddenGroups(new Set()); }}
             filterBar={
               <div className="flex flex-col gap-3 px-4 py-3">
                 {/* 序列 */}
@@ -822,20 +1008,20 @@ export default function BatchResultsPage() {
                     value={filterScoreMax} onChange={e => setFilterScoreMax(e.target.value)}
                     className="w-16 px-2 py-1 rounded-md bg-[#292929] border border-[#444] text-xs text-slate-200 placeholder-neutral-600 focus:outline-none focus:border-[#5D56C1]" />
                 </div>
-                {/* 表头 */}
+                {/* 类别 */}
                 <div className="flex items-start gap-2 flex-wrap">
-                  <span className="text-xs text-neutral-500 w-14 shrink-0 pt-0.5">表头</span>
+                  <span className="text-xs text-neutral-500 w-14 shrink-0 pt-0.5">类别</span>
                   <div className="flex flex-wrap gap-1.5">
                     {allColumnGroups.map(g => {
-                      const visible = !hiddenGroups.has(g.group);
+                      const selected = !hiddenGroups.has(g.group);
                       return (
                         <button key={g.group} type="button"
                           onClick={() => setHiddenGroups(prev => {
                             const next = new Set(prev);
-                            visible ? next.add(g.group) : next.delete(g.group);
+                            selected ? next.add(g.group) : next.delete(g.group);
                             return next;
                           })}
-                          className={`px-2 py-0.5 rounded text-xs border transition-colors ${visible ? `${g.labelClass} border-current` : 'text-neutral-600 border-[#3a3a3a]'}`}>
+                          className={`px-2 py-0.5 rounded text-xs border transition-colors ${selected ? `${g.labelClass} border-current` : 'text-neutral-600 border-[#3a3a3a]'}`}>
                           {g.group}
                         </button>
                       );
@@ -852,58 +1038,36 @@ export default function BatchResultsPage() {
       {viewMode === 'detail' && (() => {
         const fold = batchFolding[effectiveSelectedId] ?? { status: 'idle' };
         const isTop10 = scoredList.filter(({ score }) => score !== null).slice(0, 10).some(({ s }) => s.id === effectiveSelectedId);
-        const curIdx = detailList.findIndex(({ s }) => s.id === effectiveSelectedId);
+        const curIdx = displayList.findIndex(({ s }) => s.id === effectiveSelectedId);
 
         return (
           <div className="flex flex-col flex-1 min-h-0 gap-2">
 
             {/* Sequence switcher */}
             <div className="shrink-0 flex items-center gap-2 px-1">
-              {/* Protein name + badges */}
-              <h2 className="text-base font-bold text-slate-100 truncate min-w-0 flex-1">{selectedEntry?.s.name}</h2>
-              {proteinType && (
-                <span className={`text-xs px-2 py-0.5 rounded-full shrink-0 ${
-                  isAntibody ? 'bg-blue-500/20 text-blue-300'
-                  : proteinType === 'Peptide' ? 'bg-purple-500/20 text-purple-300'
-                  : 'bg-emerald-500/20 text-emerald-300'
-                }`}>{proteinType}</span>
-              )}
-              {selectedEntry && recommendedIds.has(selectedEntry.s.id) && (
-                <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 shrink-0">Recommended</span>
-              )}
-              {/* Divider */}
-              <div className="h-4 w-px bg-[#3a3a3a] shrink-0 mx-1" />
-              {/* Sort toggle */}
-              <button type="button"
-                onClick={() => setDetailSortOrder(o => o === 'asc' ? 'desc' : 'asc')}
-                title={detailSortOrder === 'asc' ? '当前：风险评分升序' : '当前：风险评分降序'}
-                className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs bg-[#1F1F1F] border border-[#3a3a3a] text-slate-400 hover:text-slate-200 hover:border-[#555] transition-colors shrink-0">
-                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  {detailSortOrder === 'asc'
-                    ? <path strokeLinecap="round" strokeLinejoin="round" d="M3 4h13M3 8h9M3 12h5m8 0l4-4m0 0l4 4m-4-4v12" />
-                    : <path strokeLinecap="round" strokeLinejoin="round" d="M3 4h13M3 8h9M3 12h5m8 4l4 4m0 0l4-4m-4 4V8" />
-                  }
-                </svg>
-                排序
-              </button>
-              {/* Prev / counter / Next */}
-              <div className="flex items-center gap-1 shrink-0">
-                <button type="button" disabled={curIdx <= 0}
-                  onClick={() => setSelectedId(detailList[curIdx - 1].s.id)}
-                  className="p-1 rounded text-slate-400 hover:text-slate-200 disabled:opacity-30 transition-colors">
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-                  </svg>
-                </button>
-                <span className="text-xs text-neutral-500 px-1">{curIdx + 1} / {detailList.length}</span>
-                <button type="button" disabled={curIdx >= detailList.length - 1}
-                  onClick={() => setSelectedId(detailList[curIdx + 1].s.id)}
-                  className="p-1 rounded text-slate-400 hover:text-slate-200 disabled:opacity-30 transition-colors">
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                  </svg>
-                </button>
+              {/* Protein name + recommended badge */}
+              <div className="flex items-center gap-2 flex-1 min-w-0">
+                <h2 className="text-base font-bold text-slate-100 truncate min-w-0">{selectedEntry?.s.name}</h2>
+                {selectedEntry && recommendedIds.has(selectedEntry.s.id) && (
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 shrink-0">Recommended</span>
+                )}
               </div>
+              {/* Prev / counter / Next */}
+              <button type="button" disabled={curIdx <= 0}
+                onClick={() => setSelectedId(displayList[curIdx - 1].s.id)}
+                className="p-1 rounded text-slate-400 hover:text-slate-200 disabled:opacity-30 transition-colors shrink-0">
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                </svg>
+              </button>
+              <span className="text-xs text-neutral-500 shrink-0">{curIdx + 1} / {displayList.length}</span>
+              <button type="button" disabled={curIdx >= displayList.length - 1}
+                onClick={() => setSelectedId(displayList[curIdx + 1].s.id)}
+                className="p-1 rounded text-slate-400 hover:text-slate-200 disabled:opacity-30 transition-colors shrink-0">
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
             </div>
 
             {/* Main layout: left sequence+3D / right scan results */}
@@ -974,7 +1138,7 @@ export default function BatchResultsPage() {
               {(() => {
                 const hotspots = selectedResult?.result?.hotspots ?? [];
                 const detailActiveFilterCount =
-                  (detailFilterGroup.length > 0 ? 1 : 0) +
+                  (detailFilterGroup.size > 0 ? 1 : 0) +
                   (detailFilterRisk.length > 0 ? 1 : 0) +
                   (detailFilterRegion !== 'all' ? 1 : 0) +
                   (detailFilterRsaMin > 0 || detailFilterRsaMax < 100 ? 1 : 0);
@@ -986,9 +1150,16 @@ export default function BatchResultsPage() {
                   <div className="flex-1 rounded-2xl bg-[#292929] px-5 py-4 flex flex-col overflow-hidden min-w-0">
                     {/* Header */}
                     <div className="shrink-0 flex items-center justify-between gap-3 pb-3">
-                      <p className="text-sm text-slate-400">
-                        序列长度：{selectedResult?.result?.sequence_length ?? '—'}，命中位点：{hotspots.length} 个
-                      </p>
+                      <div className="flex items-center gap-2">
+                        <h2 className="text-base font-bold text-slate-100">扫描结果</h2>
+                        {proteinType && (
+                          <span className={`text-xs px-2 py-0.5 rounded-full ${
+                            isAntibody ? 'bg-blue-500/20 text-blue-300'
+                            : proteinType === 'Peptide' ? 'bg-purple-500/20 text-purple-300'
+                            : 'bg-emerald-500/20 text-emerald-300'
+                          }`}>{proteinType}</span>
+                        )}
+                      </div>
                       {hotspots.length > 0 && (
                         <div className="flex items-center gap-2 relative">
                           {/* 筛选按钮 */}
@@ -1017,15 +1188,15 @@ export default function BatchResultsPage() {
                                 {/* 类别 */}
                                 <div className="space-y-2">
                                   <span className="text-xs font-medium text-neutral-400">
-                                    类别{detailFilterGroup.length > 0 && <span className="text-[#8b85e0] ml-1">({detailFilterGroup.length})</span>}
+                                    类别{detailFilterGroup.size > 0 && <span className="text-[#8b85e0] ml-1">({detailFilterGroup.size})</span>}
                                   </span>
                                   <div className="flex flex-wrap gap-1.5">
                                     {allGroups.map(g => {
-                                      const active = detailFilterGroup.includes(g);
+                                      const selected = !detailFilterGroup.has(g);
                                       return (
                                         <button key={g} type="button"
-                                          onClick={() => setDetailFilterGroup(prev => active ? prev.filter(x => x !== g) : [...prev, g])}
-                                          className={`px-2 py-1 rounded-md text-xs transition-colors ${active ? 'bg-[#5D56C1] text-slate-50' : 'bg-[#292929] text-slate-400 hover:text-slate-200'}`}>
+                                          onClick={() => setDetailFilterGroup(prev => { const next = new Set(prev); selected ? next.add(g) : next.delete(g); return next; })}
+                                          className={`px-2 py-1 rounded-md text-xs transition-colors ${selected ? 'bg-[#5D56C1] text-slate-50' : 'bg-[#292929] text-slate-400 hover:text-slate-200'}`}>
                                           {g}
                                         </button>
                                       );
@@ -1121,7 +1292,7 @@ export default function BatchResultsPage() {
                                     确定
                                   </button>
                                   <button type="button"
-                                    onClick={() => { setDetailFilterRegion('all'); setDetailFilterGroup([]); setDetailFilterRisk([]); setDetailFilterRsaMin(0); setDetailFilterRsaMax(100); }}
+                                    onClick={() => { setDetailFilterRegion('all'); setDetailFilterGroup(new Set()); setDetailFilterRisk([]); setDetailFilterRsaMin(0); setDetailFilterRsaMax(100); }}
                                     className="flex-1 px-3 py-2 rounded-lg text-xs text-slate-400 hover:text-slate-200 bg-[#292929] transition-colors">
                                     清空筛选
                                   </button>
@@ -1132,6 +1303,10 @@ export default function BatchResultsPage() {
                         </div>
                       )}
                     </div>
+
+                    <p className="shrink-0 text-sm text-slate-400 pb-2">
+                      序列长度：{selectedResult?.result?.sequence_length ?? '—'}，命中位点：{hotspots.length} 个
+                    </p>
 
                     {/* Hotspot list */}
                     {selectedResult?.status === 'error' ? (
@@ -1144,7 +1319,7 @@ export default function BatchResultsPage() {
                           {hotspots.length > 0 ? (
                             <div className="text-sm">
                               {allGroups
-                                .filter(g => detailFilterGroup.length === 0 || detailFilterGroup.includes(g))
+                                .filter(g => !detailFilterGroup.has(g))
                                 .map(groupLabel => {
                                   const items = hotspots
                                     .filter(h => h.group === groupLabel)
@@ -1158,7 +1333,7 @@ export default function BatchResultsPage() {
                                     .filter(h => detailFilterRisk.length === 0 || detailFilterRisk.includes(h.final_risk))
                                     .filter(h => {
                                       if (detailFilterRsaMin === 0 && detailFilterRsaMax === 100) return true;
-                                      if (h.rsa == null || h.rsa < 0) return detailFilterRsaMin === 0;
+                                      if (h.rsa == null || h.rsa < 0) return false;
                                       const pct = h.rsa * 100;
                                       return pct >= detailFilterRsaMin && pct <= detailFilterRsaMax;
                                     })
