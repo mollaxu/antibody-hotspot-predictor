@@ -49,7 +49,8 @@ export function parseFasta(text) {
 
 /** 解析 Excel 文件（ArrayBuffer），返回序列数组（async，懒加载 xlsx） */
 export async function parseExcel(buffer) {
-  const XLSX = (await import('xlsx')).default;
+  const xlsxModule = await import('xlsx');
+  const XLSX = xlsxModule.default ?? xlsxModule;
   const wb = XLSX.read(new Uint8Array(buffer), { type: 'array' });
   const ws = wb.Sheets[wb.SheetNames[0]];
   const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
