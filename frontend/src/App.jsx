@@ -259,7 +259,7 @@ function App() {
     const seq = cleanSequence(rawSeq || '');
     if (!seq) return;
     if (seq.length > 400) {
-      setFoldingError('序列超过 400 残基，ESMFold 暂不支持，请上传 PDB 文件。');
+      setFoldingError('序列超过 400 残基，MMFold 暂不支持，请上传 PDB 文件。');
       setFoldingStatus('error');
       return;
     }
@@ -283,7 +283,7 @@ function App() {
       const data = await resp.json();
       const pdbContent = data.pdb;
       if (!pdbContent || !pdbContent.includes('ATOM')) {
-        throw new Error('ESMFold 返回的结构数据无效');
+        throw new Error('MMFold 返回的结构数据无效');
       }
       if (data.warning) {
         setFoldingError(data.warning);
@@ -301,7 +301,7 @@ function App() {
       // 结构就绪后用真实 RSA 重新扫描
       rescanWithPdb(seq, pdbContent);
     } catch (e) {
-      setFoldingError(e.message || 'ESMFold 预测失败，请稍后重试。');
+      setFoldingError(e.message || 'MMFold 预测失败，请稍后重试。');
       setFoldingStatus('error');
     }
   };

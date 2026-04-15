@@ -222,7 +222,7 @@ export default function InputPage() {
             <label className="flex items-center justify-between cursor-pointer">
               <div>
                 <p className="text-sm text-slate-200">结构预测</p>
-                <p className="text-sm text-neutral-500 mt-0.5">使用 ESMFold 自动预测 3D 结构（序列 ≤ 400 残基）</p>
+                <p className="text-sm text-neutral-500 mt-0.5">使用 MMFold 自动预测 3D 结构（序列 ≤ 400 残基）</p>
               </div>
               <div className={`relative w-10 h-5 rounded-full transition-colors ${enablePrediction ? 'bg-[#5D56C1]' : 'bg-slate-600'}`}
                 onClick={() => setEnablePrediction(v => !v)}>

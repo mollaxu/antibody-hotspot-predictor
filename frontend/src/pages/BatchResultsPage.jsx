@@ -930,11 +930,11 @@ export default function BatchResultsPage() {
     }
   }, [userRules, setUserRules, setCustomRules]);
 
-  // Trigger ESMFold for one sequence in batch detail view
+  // Trigger MMFold for one sequence in batch detail view
   const predictBatchStructure = useCallback(async (seqId, sequence) => {
     const seq = sequence.trim().toUpperCase();
     if (seq.length > 400) {
-      setBatchFolding(prev => ({ ...prev, [seqId]: { status: 'error', pdbUrl: '', pdbText: '', error: '序列超过 400 残基，ESMFold 暂不支持' } }));
+      setBatchFolding(prev => ({ ...prev, [seqId]: { status: 'error', pdbUrl: '', pdbText: '', error: '序列超过 400 残基，MMFold 暂不支持' } }));
       return;
     }
     setBatchFolding(prev => ({ ...prev, [seqId]: { status: 'loading', pdbUrl: '', pdbText: '', error: '' } }));
@@ -947,7 +947,7 @@ export default function BatchResultsPage() {
       if (!resp.ok) throw new Error(`结构预测失败 [HTTP ${resp.status}]`);
       const data = await resp.json();
       const pdbContent = data.pdb;
-      if (!pdbContent || !pdbContent.includes('ATOM')) throw new Error('ESMFold 返回的结构数据无效');
+      if (!pdbContent || !pdbContent.includes('ATOM')) throw new Error('MMFold 返回的结构数据无效');
       const blob = new Blob([pdbContent], { type: 'text/plain' });
       const url = URL.createObjectURL(blob);
       setBatchFolding(prev => ({ ...prev, [seqId]: { status: 'done', pdbUrl: url, pdbText: pdbContent, error: data.warning || '' } }));
@@ -956,7 +956,7 @@ export default function BatchResultsPage() {
     }
   }, []);
 
-  // 从 RCSB PDB 拉取已知结构；失败时 fallback ESMFold
+  // 从 RCSB PDB 拉取已知结构；失败时 fallback MMFold
   const fetchPdbStructure = useCallback(async (seqId, pdbId, sequence) => {
     setBatchFolding(prev => ({ ...prev, [seqId]: { status: 'loading', pdbUrl: '', pdbText: '', error: '' } }));
     try {
@@ -968,7 +968,7 @@ export default function BatchResultsPage() {
       const url = URL.createObjectURL(blob);
       setBatchFolding(prev => ({ ...prev, [seqId]: { status: 'done', pdbUrl: url, pdbText: pdbContent, error: '' } }));
     } catch (_) {
-      // RCSB 拉取失败，回退到 ESMFold 预测
+      // RCSB 拉取失败，回退到 MMFold 预测
       predictBatchStructure(seqId, sequence);
     }
   }, [predictBatchStructure]);
@@ -1106,7 +1106,7 @@ export default function BatchResultsPage() {
   [allColumnGroups, hiddenGroups]);
 
   // For sequences that already carry pdbText (uploaded PDB files), initialize
-  // batchFolding directly — no ESMFold call needed.
+  // batchFolding directly — no MMFold call needed.
   useEffect(() => {
     if (viewMode !== 'detail') return;
     scoredList.forEach(({ s }) => {
@@ -1120,7 +1120,7 @@ export default function BatchResultsPage() {
     });
   }, [viewMode, scoredList]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // 进入详情页时，对有 pdbId 的条目从 RCSB 拉取结构（失败则 fallback ESMFold）
+  // 进入详情页时，对有 pdbId 的条目从 RCSB 拉取结构（失败则 fallback MMFold）
   useEffect(() => {
     if (viewMode !== 'detail') return;
     scoredList.forEach(({ s }) => {
@@ -1338,7 +1338,7 @@ export default function BatchResultsPage() {
                       <div className="text-center space-y-3">
                         <div className="inline-block w-8 h-8 border-2 border-slate-500 border-t-cyan-400 rounded-full animate-spin" />
                         <p className="text-sm text-slate-300">结构预测中…预计需要 10–30 秒</p>
-                        <p className="text-xs text-neutral-500">由 ESMFold 提供预测服务</p>
+                        <p className="text-xs text-neutral-500">由 MMFold 提供预测服务</p>
                       </div>
                     </div>
                   )}

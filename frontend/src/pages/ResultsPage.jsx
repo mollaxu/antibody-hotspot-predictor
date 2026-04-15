@@ -59,7 +59,7 @@ export default function ResultsPage() {
                 <div className="text-center space-y-3">
                   <div className="inline-block w-8 h-8 border-2 border-slate-500 border-t-cyan-400 rounded-full animate-spin" />
                   <p className="text-sm text-slate-300">结构预测中…预计需要 10-30 秒</p>
-                  <p className="text-xs text-neutral-500">由 ESMFold 提供预测服务</p>
+                  <p className="text-xs text-neutral-500">由 MMFold 提供预测服务</p>
                 </div>
               </div>
             )}
