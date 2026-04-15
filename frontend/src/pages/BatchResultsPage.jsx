@@ -914,6 +914,7 @@ export default function BatchResultsPage() {
   const [detailFilterRsaMin, setDetailFilterRsaMin] = useState(0);
   const [detailFilterRsaMax, setDetailFilterRsaMax] = useState(100);
   const startedFoldRef = useRef(new Set());
+  const startedFetchRef = useRef(new Set()); // 已发起 RCSB 拉取的 seqId
   // Snapshot of userRules IDs at the moment the rules modal opens — used to
   // detect new rules added during this session and trigger a re-scan.
   const userRulesSnapshotRef = useRef(null);
@@ -954,6 +955,23 @@ export default function BatchResultsPage() {
       setBatchFolding(prev => ({ ...prev, [seqId]: { status: 'error', pdbUrl: '', pdbText: '', error: e.message } }));
     }
   }, []);
+
+  // 从 RCSB PDB 拉取已知结构；失败时 fallback ESMFold
+  const fetchPdbStructure = useCallback(async (seqId, pdbId, sequence) => {
+    setBatchFolding(prev => ({ ...prev, [seqId]: { status: 'loading', pdbUrl: '', pdbText: '', error: '' } }));
+    try {
+      const resp = await fetch(`https://files.rcsb.org/download/${pdbId.toUpperCase()}.pdb`);
+      if (!resp.ok) throw new Error(`RCSB 未找到 ${pdbId.toUpperCase()} [HTTP ${resp.status}]`);
+      const pdbContent = await resp.text();
+      if (!pdbContent.includes('ATOM')) throw new Error('PDB 文件无效');
+      const blob = new Blob([pdbContent], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      setBatchFolding(prev => ({ ...prev, [seqId]: { status: 'done', pdbUrl: url, pdbText: pdbContent, error: '' } }));
+    } catch (_) {
+      // RCSB 拉取失败，回退到 ESMFold 预测
+      predictBatchStructure(seqId, sequence);
+    }
+  }, [predictBatchStructure]);
 
   // Reset detail filters when selected sequence changes
   useEffect(() => {
@@ -1087,11 +1105,40 @@ export default function BatchResultsPage() {
     hiddenGroups.size === 0 ? allColumnGroups : allColumnGroups.filter(g => !hiddenGroups.has(g.group)),
   [allColumnGroups, hiddenGroups]);
 
-  // Auto-predict for top-10 sequences when detail view is first shown
+  // For sequences that already carry pdbText (uploaded PDB files), initialize
+  // batchFolding directly — no ESMFold call needed.
+  useEffect(() => {
+    if (viewMode !== 'detail') return;
+    scoredList.forEach(({ s }) => {
+      if (!s.pdbText) return;
+      setBatchFolding(prev => {
+        if (prev[s.id]) return prev;
+        const blob = new Blob([s.pdbText], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        return { ...prev, [s.id]: { status: 'done', pdbUrl: url, pdbText: s.pdbText, error: '' } };
+      });
+    });
+  }, [viewMode, scoredList]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 进入详情页时，对有 pdbId 的条目从 RCSB 拉取结构（失败则 fallback ESMFold）
+  useEffect(() => {
+    if (viewMode !== 'detail') return;
+    scoredList.forEach(({ s }) => {
+      if (!s.pdbId || s.pdbText) return; // 已有结构数据则跳过
+      if (!startedFetchRef.current.has(s.id)) {
+        startedFetchRef.current.add(s.id);
+        fetchPdbStructure(s.id, s.pdbId, s.sequence);
+      }
+    });
+  }, [viewMode, scoredList, fetchPdbStructure]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Auto-predict for top-10 sequences when detail view is first shown.
+  // Skip sequences that already have structure (pdbText) or a known PDB ID (pdbId).
   useEffect(() => {
     if (viewMode !== 'detail') return;
     const top10 = scoredList.filter(({ score }) => score !== null).slice(0, 10);
     top10.forEach(({ s }) => {
+      if (s.pdbText || s.pdbId) return; // structure already handled
       if (!startedFoldRef.current.has(s.id)) {
         startedFoldRef.current.add(s.id);
         predictBatchStructure(s.id, s.sequence);

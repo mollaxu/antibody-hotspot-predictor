@@ -204,7 +204,7 @@ function App() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             sequence: seq,
-            pdb_text: null,
+            pdb_text: s.pdbText || null,
             disabled_rules: dr.length > 0 ? dr : null,
             risk_overrides: Object.keys(ro).length > 0 ? ro : null,
             extra_rules: er.length > 0 ? er : null,

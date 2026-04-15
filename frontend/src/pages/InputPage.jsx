@@ -133,7 +133,7 @@ export default function InputPage() {
                 </div>
                 <label className="shrink-0 text-xs text-[#8b85e0] hover:text-[#a9a4f0] cursor-pointer transition-colors">
                   重新上传
-                  <input ref={batchFileInputRef} type="file" accept=".fasta,.fa,.faa,.fas,.txt,.xlsx,.xls" className="hidden" onChange={handleBatchFileUpload} />
+                  <input ref={batchFileInputRef} type="file" accept=".fasta,.fa,.faa,.fas,.txt,.xlsx,.xls,.pdb,.ent,.zip" className="hidden" onChange={handleBatchFileUpload} />
                 </label>
               </div>
             ) : (
@@ -142,9 +142,9 @@ export default function InputPage() {
                 <svg className="w-8 h-8 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
                 </svg>
-                <span className="text-sm text-slate-400">点击上传 FASTA 或 Excel 文件</span>
-                <span className="text-xs text-neutral-500">.fasta · .fa · .xlsx · .xls</span>
-                <input ref={batchFileInputRef} type="file" accept=".fasta,.fa,.faa,.fas,.txt,.xlsx,.xls" className="hidden" onChange={handleBatchFileUpload} />
+                <span className="text-sm text-slate-400">点击上传 FASTA、Excel 或 PDB 文件</span>
+                <span className="text-xs text-neutral-500">.fasta · .fa · .xlsx · .xls · .pdb · .zip</span>
+                <input ref={batchFileInputRef} type="file" accept=".fasta,.fa,.faa,.fas,.txt,.xlsx,.xls,.pdb,.ent,.zip" className="hidden" onChange={handleBatchFileUpload} />
               </label>
             )}
 
